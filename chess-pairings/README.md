@@ -250,7 +250,7 @@ Swagger:
 ### Docker
 
 ```sh
-cp .env.example .env
+cp .env.example .env.dev
 make compose
 ```
 
@@ -258,6 +258,95 @@ Comandi utili:
 
 - `make compose`
 - `make build-players-db`
+- `make compose ENV=prod`
+
+## Ambienti
+
+Il progetto usa una configurazione comune in `docker-compose.yml`, un override sviluppo in `docker-compose.dev.yml` e un override produzione in `docker-compose.prod.yml`.
+
+### Development
+
+- env file: `.env` oppure `.env.dev`
+- esempio: `.env.example`
+- frontend con `vite`
+- backend con `uvicorn --reload`
+- bind mounts attivi per sviluppo locale
+- immagini buildate da `Dockerfile.dev`
+
+Esempio:
+
+```sh
+cp .env.example .env.dev
+make compose
+```
+
+### Production
+
+- env file: `.env.prod`
+- esempio: `.env.example`
+- frontend buildato statico e servito da Nginx
+- backend senza `--reload`
+- nessun bind mount del codice applicativo
+- immagini buildate da `Dockerfile.prod`
+- Postgres non esposto pubblicamente
+
+Esempio:
+
+```sh
+cp .env.example .env.prod
+make compose ENV=prod
+```
+
+Variabili da personalizzare in produzione:
+
+- `POSTGRES_PASSWORD`
+- `DATABASE_URL`
+- `ALLOWED_ORIGINS`
+- `FILES_BASE_URL`
+- `VITE_API_URL`
+- `FRONTEND_PORT` se vuoi esporre il frontend su una porta diversa da `8080`
+
+Per un deploy con domini separati, la configurazione attesa e' questa:
+
+- `app.example.com` verso il container frontend
+- `api.example.com` verso il container backend
+
+Il reverse proxy TLS resta esterno a Docker Compose, ad esempio con Nginx o Caddy sul server.
+
+### Produzione su un solo dominio
+
+Non serve per forza un sottodominio separato per le API. Puoi usare:
+
+- frontend: `https://chessdesk.kasparov.polito.it`
+- API: `https://chessdesk.kasparov.polito.it/api/...`
+- files: `https://chessdesk.kasparov.polito.it/files/...`
+
+In questo caso, in `.env.prod` imposta cosi:
+
+```env
+POSTGRES_USER=chess
+POSTGRES_PASSWORD=<password-forte>
+POSTGRES_DB=chess_pairings
+POSTGRES_PORT=5432
+BACKEND_PORT=8010
+FRONTEND_PORT=8080
+DATABASE_URL=postgresql+asyncpg://chess:<password-forte>@postgres:5432/chess_pairings
+ALLOWED_ORIGINS=["https://chessdesk.kasparov.polito.it"]
+BBP_PAIRINGS_BIN=/usr/local/bin/bbpPairings
+BBP_PAIRINGS_SYSTEM=dutch
+FILES_BASE_URL=https://chessdesk.kasparov.polito.it
+PLAYER_LIST_FILE=/app/data/players_list_foa.txt
+VITE_API_URL=https://chessdesk.kasparov.polito.it
+```
+
+E' inclusa anche una configurazione Nginx host-level pronta in `deploy/nginx/chessdesk.kasparov.polito.it.conf`.
+
+Deploy tipico sul server:
+
+```sh
+cp .env.example .env.prod
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d --build
+```
 - `make logs`
 - `make ps`
 - `make down`
