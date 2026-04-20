@@ -1,0 +1,15 @@
+.DS_Store
+.env
+node_modules/
+dist/
+__pycache__/
+.pytest_cache/
+.venv/
+.venv312/
+*.pyc
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+backend/storage/documents/*
+backend/storage/pairings/*
+backend/data/*
