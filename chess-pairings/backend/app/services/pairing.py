@@ -1,0 +1,197 @@
+from fastapi import HTTPException
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.pairing import Pairing, PairingResult
+from app.models.round import Round
+from app.models.tournament import RoundStatus, Tournament
+from app.schemas.pairing import PairingCreateResponse, PairingResultUpdate
+from app.services.bbp_pairings import BbpPairingsService
+from app.services.standings import StandingsService
+from app.services.team_pairings import TeamPairingsService
+from app.services import tournament as tournament_service
+
+
+async def get_pairing(db: AsyncSession, pairing_id: int) -> Pairing | None:
+    result = await db.execute(
+        select(Pairing)
+        .where(Pairing.id == pairing_id)
+        .options(selectinload(Pairing.round))
+    )
+    return result.scalar_one_or_none()
+
+
+async def _get_round(db: AsyncSession, round_id: int) -> Round | None:
+    result = await db.execute(
+        select(Round)
+        .where(Round.id == round_id)
+        .options(
+            selectinload(Round.pairings).selectinload(Pairing.white_player),
+            selectinload(Round.pairings).selectinload(Pairing.black_player),
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+def _generated_rounds(tournament: Tournament) -> list[Round]:
+    return [
+        round_model
+        for round_model in sorted(tournament.rounds, key=lambda item: item.number)
+        if round_model.pairings
+    ]
+
+
+def _latest_generated_round(tournament: Tournament) -> Round | None:
+    rounds = _generated_rounds(tournament)
+    return rounds[-1] if rounds else None
+
+
+def _assert_latest_round_completed(tournament: Tournament) -> None:
+    latest_round = _latest_generated_round(tournament)
+    if latest_round is None:
+        return
+
+    if any(pairing.result == PairingResult.unplayed for pairing in latest_round.pairings):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Inserisci tutti i risultati del turno {latest_round.number} prima di generare il turno successivo.",
+        )
+
+
+async def generate_pairings(
+    db: AsyncSession, tournament: Tournament
+) -> PairingCreateResponse:
+    if not tournament.is_registration_closed:
+        raise HTTPException(
+            status_code=409,
+            detail="Prima di generare il primo turno devi chiudere le iscrizioni del torneo.",
+        )
+
+    _assert_latest_round_completed(tournament)
+
+    next_round = next(
+        (
+            round_model
+            for round_model in sorted(tournament.rounds, key=lambda item: item.number)
+            if not round_model.pairings
+        ),
+        None,
+    )
+
+    if next_round is None:
+        latest_round = _latest_generated_round(tournament)
+        if latest_round is None:
+            raise HTTPException(status_code=404, detail="Nessun turno disponibile")
+        return PairingCreateResponse(
+            round=tournament_service.serialize_round(latest_round),
+            standings=StandingsService().build_standings(tournament),
+        )
+
+    if tournament.type == "team":
+        rows = TeamPairingsService().generate_next_round(tournament, next_round.number)
+    else:
+        rows = BbpPairingsService().generate_next_round(tournament)
+
+    for index, row in enumerate(rows, start=1):
+        db.add(
+            Pairing(
+                round_id=next_round.id,
+                match_number=row.get("match_number"),
+                board_number=row.get("board_number", index),
+                white_player_id=row["white_player_id"],
+                black_player_id=row.get("black_player_id"),
+                is_bye=row.get("is_bye", False),
+                result=PairingResult.bye if row.get("is_bye") else PairingResult.unplayed,
+                white_points=1 if row.get("is_bye") else 0,
+                black_points=0,
+            )
+        )
+
+    next_round.status = RoundStatus.published
+    await db.commit()
+
+    refreshed_tournament = await tournament_service.get_tournament(db, tournament.id)
+    refreshed_round = await _get_round(db, next_round.id)
+
+    return PairingCreateResponse(
+        round=tournament_service.serialize_round(refreshed_round),
+        standings=StandingsService().build_standings(refreshed_tournament),
+    )
+
+
+async def update_pairing_result(
+    db: AsyncSession, pairing: Pairing, data: PairingResultUpdate
+) -> dict:
+    round_result = await db.execute(
+        select(Round)
+        .where(Round.id == pairing.round_id)
+        .options(selectinload(Round.tournament).selectinload(Tournament.rounds).selectinload(Round.pairings))
+    )
+    round_model = round_result.scalar_one()
+    tournament = round_model.tournament
+    latest_round = _latest_generated_round(tournament)
+
+    if latest_round is None or latest_round.id != pairing.round_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Puoi modificare i risultati solo dell'ultimo turno generato. Per modificare un turno precedente devi prima eliminare i turni successivi.",
+        )
+
+    pairing.result = data.result
+
+    if data.result == PairingResult.white_win:
+        pairing.white_points = 1
+        pairing.black_points = 0
+    elif data.result == PairingResult.black_win:
+        pairing.white_points = 0
+        pairing.black_points = 1
+    elif data.result == PairingResult.draw:
+        pairing.white_points = 0.5
+        pairing.black_points = 0.5
+    elif data.result == PairingResult.white_forfeit_win:
+        pairing.white_points = 1
+        pairing.black_points = 0
+    elif data.result == PairingResult.black_forfeit_win:
+        pairing.white_points = 0
+        pairing.black_points = 1
+    elif data.result == PairingResult.double_forfeit_loss:
+        pairing.white_points = 0
+        pairing.black_points = 0
+    elif data.result == PairingResult.double_forfeit_win:
+        pairing.white_points = 1
+        pairing.black_points = 1
+    elif data.result == PairingResult.bye:
+        pairing.white_points = 1
+        pairing.black_points = 0
+    else:
+        pairing.white_points = 0
+        pairing.black_points = 0
+
+    await db.commit()
+
+    round_model = await _get_round(db, pairing.round_id)
+    if round_model and round_model.pairings and all(
+        item.result != PairingResult.unplayed for item in round_model.pairings
+    ):
+        round_model.status = RoundStatus.completed
+        await db.commit()
+
+    return {"ok": True, "pairingId": pairing.id, "result": pairing.result}
+
+
+async def delete_latest_round(db: AsyncSession, tournament: Tournament) -> dict:
+    latest_round = _latest_generated_round(tournament)
+    if latest_round is None:
+        raise HTTPException(status_code=409, detail="Non ci sono turni generati da eliminare.")
+
+    await db.execute(delete(Pairing).where(Pairing.round_id == latest_round.id))
+    latest_round.status = RoundStatus.pending
+    await db.commit()
+
+    refreshed_tournament = await tournament_service.get_tournament(db, tournament.id)
+    return {
+        "ok": True,
+        "deletedRound": latest_round.number,
+        "standings": StandingsService().build_standings(refreshed_tournament),
+    }
