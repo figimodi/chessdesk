@@ -154,11 +154,15 @@ Modello di accesso:
 
 - un account `admin`, creato o aggiornato automaticamente all'avvio tramite variabili ambiente
 - account `user` creati dall'admin dalla webapp
+- registrazione pubblica disponibile dalla homepage
+- la registrazione pubblica richiede conferma email prima del login
 - un visitatore anonimo puo' vedere tutti i tornei ma non puo' modificarli
-- l'admin vede e gestisce tutti i tornei
+- l'admin vede e gestisce tutti i tornei pubblici
 - ogni `user` puo' vedere tutti i tornei ma modifica solo quelli di cui e' proprietario
 - gli utenti creati dall'admin devono cambiare la password al primo login prima di usare l'app
 - i visitatori possono iscriversi pubblicamente ai tornei con iscrizioni aperte
+- i tornei privati sono visibili e gestibili solo dal loro proprietario
+- il profilo utente espone username, email, cambio password, logout e accesso a `/users` per gli admin
 
 ### Iscrizione pubblica ai tornei
 
@@ -178,9 +182,18 @@ Variabili ambiente rilevanti:
 
 - `AUTH_SECRET_KEY`
 - `AUTH_TOKEN_TTL_HOURS`
+- `EMAIL_CONFIRMATION_TOKEN_TTL_HOURS`
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD`
 - `ADMIN_USERNAME`
+- `FRONTEND_BASE_URL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
+- `SMTP_FROM_NAME`
+- `SMTP_USE_TLS`
 
 Il primo admin viene bootstrapato automaticamente all'avvio del backend solo se `ADMIN_EMAIL`, `ADMIN_PASSWORD` e `ADMIN_USERNAME` sono valorizzati.
 
@@ -191,7 +204,23 @@ Il progetto usa Alembic per gestire lo schema del database.
 Comandi utili:
 
 - `make migrate` esegue `alembic upgrade head` nel container backend
+- `make revision name="add team pin"` crea una nuova migration Alembic
+- `make history` mostra lo storico migration
+- `make current` mostra la revision corrente nel DB
 - all'avvio del backend viene eseguito automaticamente `upgrade head`
+
+Flusso consigliato per una modifica strutturale al database:
+
+1. aggiorna i modelli SQLAlchemy in `backend/app/models/`
+2. crea una migration con `make revision name="descrizione modifica"`
+3. implementa `upgrade()` e `downgrade()` nel file generato in `backend/alembic/versions/`
+4. applica la migration con `make migrate`
+5. aggiorna eventuali schema API e frontend che dipendono dal nuovo campo o dalla nuova tabella
+
+Regola pratica:
+
+- ogni cambiamento strutturale del DB deve passare da Alembic
+- non si aggiornano piu le tabelle con `ALTER TABLE` nello startup dell'applicazione
 
 Il login applicativo usa lo `username`, non l'email. La login form principale e' nella homepage.
 
@@ -204,6 +233,7 @@ Come in `kasparov-webapp`, il backend usa:
 - `core/database.py` per engine async e dependency injection della sessione
 - `core/config.py` per variabili ambiente
 - `alembic/` per migrazioni DB versionate
+- `app/scripts/migrate.py` come entrypoint runtime per `upgrade head`
 
 ### Moduli principali
 
@@ -276,6 +306,9 @@ Il frontend usa `Tailwind CSS + shadcn/ui`.
 ## API disponibili
 
 - `POST /api/v1/auth/login`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/confirm-email`
+- `POST /api/v1/auth/resend-confirmation`
 - `GET /api/v1/auth/me`
 - `POST /api/v1/auth/change-password`
 - `GET /health`
@@ -293,10 +326,22 @@ Il frontend usa `Tailwind CSS + shadcn/ui`.
 - `GET /api/v1/admin/users/`
 - `POST /api/v1/admin/users/`
 - `PATCH /api/v1/admin/users/{user_id}`
+- `DELETE /api/v1/admin/users/{user_id}`
 - `GET /api/v1/admin/tournaments/{tournament_id}/teams/`
 - `POST /api/v1/admin/tournaments/{tournament_id}/teams/`
+- `PUT /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}`
+- `DELETE /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}`
+- `POST /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}/members`
+- `DELETE /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}/members/{player_id}`
+- `PATCH /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}/members/order`
+- `PATCH /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}/availability`
+- `PATCH /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}/status`
+- `PATCH /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}/lineup`
 - `POST /api/v1/admin/tournaments/{tournament_id}/pairings/generate`
+- `DELETE /api/v1/admin/tournaments/{tournament_id}/pairings/latest-round`
 - `PATCH /api/v1/admin/tournaments/{tournament_id}/pairings/results/{pairing_id}`
+- `POST /api/v1/admin/tournaments/{tournament_id}/close-registration`
+- `POST /api/v1/admin/tournaments/{tournament_id}/reopen-registration`
 
 Swagger:
 
@@ -314,6 +359,8 @@ make compose
 Comandi utili:
 
 - `make compose`
+- `make migrate`
+- `make revision name="add team pin"`
 - `make build-players-db`
 - `make compose ENV=prod`
 
@@ -361,6 +408,16 @@ Variabili da personalizzare in produzione:
 - `ALLOWED_ORIGINS`
 - `FILES_BASE_URL`
 - `VITE_API_URL`
+- `FRONTEND_BASE_URL`
+- `AUTH_SECRET_KEY`
+- `EMAIL_CONFIRMATION_TOKEN_TTL_HOURS`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
+- `SMTP_FROM_NAME`
+- `SMTP_USE_TLS`
 - `FRONTEND_PORT` se vuoi esporre il frontend su una porta diversa da `8080`
 
 Per un deploy con domini separati, la configurazione attesa e' questa:
@@ -446,12 +503,12 @@ npm run dev
 ## Limiti attuali
 
 - la generazione client OpenAPI e' predisposta ma non ancora agganciata a file generati reali
-- non sono ancora presenti auth admin, Alembic e test automatici
+- i test automatici backend e frontend non sono ancora presenti
 
 ## Prossimi miglioramenti consigliati
 
-1. aggiungere Alembic come in `kasparov-webapp`
-2. generare davvero `frontend/src/api/client/` da OpenAPI
-3. introdurre autenticazione admin e ruoli
-4. aggiungere test async backend su standings, catalogo locale giocatori e pairings
-5. supportare piu' opzioni avanzate di `bbpPairings` e checklist ufficiale
+1. generare davvero `frontend/src/api/client/` da OpenAPI
+2. aggiungere test async backend su standings, catalogo locale giocatori e pairings
+3. aggiungere test frontend per auth, profilo e gestione tornei
+4. supportare piu' opzioni avanzate di `bbpPairings` e checklist ufficiale
+5. completare il flusso squadre con PIN e iscrizione pubblica avanzata

@@ -1,4 +1,4 @@
-.PHONY: help compose down logs ps restart rebuild build-players-db update-swagger migrate
+.PHONY: help compose down logs ps restart rebuild build-players-db update-swagger migrate revision history current
 
 # Colors
 GREEN  := \033[0;32m
@@ -49,6 +49,9 @@ help:
 	@echo "  $(GREEN)ps$(NC)              List containers and their current status"
 	@echo "  $(GREEN)build-players-db$(NC) Rebuild catalog_player table from backend/data/players_list_foa.txt"
 	@echo "  $(GREEN)migrate$(NC)         Run Alembic migrations on the backend container"
+	@echo "  $(GREEN)revision$(NC)        Create a new Alembic migration (use name=\"...\")"
+	@echo "  $(GREEN)history$(NC)         Show Alembic migration history"
+	@echo "  $(GREEN)current$(NC)         Show current Alembic revision in the database"
 	@echo "  $(GREEN)update-swagger$(NC)  Fetch backend OpenAPI into frontend/src/api/swagger.yaml"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
@@ -104,6 +107,26 @@ migrate:
 	$(call check_env)
 	@echo "$(GREEN)Running Alembic migrations...$(NC)"
 	$(COMPOSE_CMD) run --rm app python -m app.scripts.migrate
+
+revision:
+	$(call check_env)
+	@if [ -z "$(name)" ]; then \
+		echo "$(RED)Error: missing migration name$(NC)"; \
+		echo "$(YELLOW)Usage: make revision name=\"add team pin\"$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Creating Alembic migration: $(name)$(NC)"
+	$(COMPOSE_CMD) run --rm app alembic revision -m "$(name)"
+
+history:
+	$(call check_env)
+	@echo "$(GREEN)Alembic history:$(NC)"
+	$(COMPOSE_CMD) run --rm app alembic history
+
+current:
+	$(call check_env)
+	@echo "$(GREEN)Current Alembic revision:$(NC)"
+	$(COMPOSE_CMD) run --rm app alembic current
 
 update-swagger:
 	curl http://localhost:8010/openapi.json -o frontend/src/api/swagger.yaml
