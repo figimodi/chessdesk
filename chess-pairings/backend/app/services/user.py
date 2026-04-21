@@ -1,4 +1,7 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tournament import Tournament
@@ -16,13 +19,17 @@ async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     return result.scalar_one_or_none()
 
 
+def normalize_username(username: str) -> str:
+    return username.strip().lower()
+
+
 async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
-    result = await db.execute(select(User).where(User.username == username.strip()))
+    result = await db.execute(select(User).where(User.username == normalize_username(username)))
     return result.scalar_one_or_none()
 
 
 async def get_users_by_username(db: AsyncSession, username: str) -> list[User]:
-    result = await db.execute(select(User).where(User.username == username.strip()).order_by(User.id.asc()))
+    result = await db.execute(select(User).where(User.username == normalize_username(username)).order_by(User.id.asc()))
     return list(result.scalars().all())
 
 
@@ -40,21 +47,27 @@ async def create_user(
     role: UserRole = UserRole.user,
     is_active: bool = True,
     email_confirmed: bool = True,
+    email_confirmation_sent_at: datetime | None = None,
     must_change_password: bool = False,
 ) -> User:
     user = User(
         email=email.lower().strip(),
-        username=username.strip(),
+        username=normalize_username(username),
         password_hash=hash_password(password),
         role=role,
         is_active=is_active,
         email_confirmed=email_confirmed,
+        email_confirmation_sent_at=email_confirmation_sent_at,
         must_change_password=must_change_password,
     )
     db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    return user
+    try:
+        await db.commit()
+        await db.refresh(user)
+        return user
+    except IntegrityError:
+        await db.rollback()
+        raise
 
 
 async def ensure_admin_user(db: AsyncSession, *, email: str, username: str, password: str) -> User:
@@ -80,10 +93,11 @@ async def ensure_admin_user(db: AsyncSession, *, email: str, username: str, pass
             role=UserRole.admin,
             is_active=True,
             email_confirmed=True,
+            email_confirmation_sent_at=datetime.now(timezone.utc),
             must_change_password=False,
         )
 
-    user.username = username.strip()
+    user.username = normalize_username(username)
     user.password_hash = hash_password(password)
     user.role = UserRole.admin
     user.is_active = True
@@ -106,7 +120,7 @@ async def ensure_admin_user(db: AsyncSession, *, email: str, username: str, pass
 
 async def authenticate_user(db: AsyncSession, username: str, password: str) -> User | None:
     user = await get_user_by_username(db, username)
-    if user is None or not user.is_active:
+    if user is None:
         return None
     if not verify_password(password, user.password_hash):
         return None
@@ -115,6 +129,13 @@ async def authenticate_user(db: AsyncSession, username: str, password: str) -> U
 
 async def confirm_user_email(db: AsyncSession, user: User) -> User:
     user.email_confirmed = True
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def mark_confirmation_sent(db: AsyncSession, user: User, *, sent_at: datetime) -> User:
+    user.email_confirmation_sent_at = sent_at
     await db.commit()
     await db.refresh(user)
     return user
@@ -130,7 +151,7 @@ async def update_user(
     must_change_password: bool | None = None,
 ) -> User:
     if username is not None:
-        user.username = username.strip()
+        user.username = normalize_username(username)
     if password is not None:
         user.password_hash = hash_password(password)
     if is_active is not None:

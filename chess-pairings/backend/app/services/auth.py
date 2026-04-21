@@ -52,12 +52,14 @@ def create_access_token(user_id: int) -> str:
     return f"{_b64encode(serialized_payload)}.{_b64encode(signature)}"
 
 
-def create_email_confirmation_token(user_id: int, email: str) -> str:
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.EMAIL_CONFIRMATION_TOKEN_TTL_HOURS)
+def create_email_confirmation_token(user_id: int, email: str, issued_at: datetime | None = None) -> str:
+    issued_at = issued_at or datetime.now(timezone.utc)
+    expires_at = issued_at + timedelta(hours=settings.EMAIL_CONFIRMATION_TOKEN_TTL_HOURS)
     payload = {
         "sub": str(user_id),
         "email": email,
         "purpose": "email_confirmation",
+        "iat": issued_at.isoformat(),
         "exp": int(expires_at.timestamp()),
     }
     serialized_payload = json.dumps(payload, separators=(",", ":")).encode()
@@ -69,7 +71,7 @@ def create_email_confirmation_token(user_id: int, email: str) -> str:
     return f"{_b64encode(serialized_payload)}.{_b64encode(signature)}"
 
 
-def decode_email_confirmation_token(token: str) -> tuple[int, str]:
+def decode_email_confirmation_token(token: str) -> tuple[int, str, datetime]:
     try:
         payload_part, signature_part = token.split(".", maxsplit=1)
         payload_bytes = _b64decode(payload_part)
@@ -92,7 +94,14 @@ def decode_email_confirmation_token(token: str) -> tuple[int, str]:
         raise HTTPException(status_code=400, detail="Confirmation token expired")
 
     try:
-        return int(payload["sub"]), str(payload["email"])
+        issued_at = payload["iat"]
+        if isinstance(issued_at, (int, float)):
+            issued_at_dt = datetime.fromtimestamp(issued_at, tz=timezone.utc)
+        else:
+            issued_at_dt = datetime.fromisoformat(str(issued_at))
+            if issued_at_dt.tzinfo is None:
+                issued_at_dt = issued_at_dt.replace(tzinfo=timezone.utc)
+        return int(payload["sub"]), str(payload["email"]), issued_at_dt
     except (KeyError, TypeError, ValueError):
         raise HTTPException(status_code=400, detail="Invalid confirmation token")
 

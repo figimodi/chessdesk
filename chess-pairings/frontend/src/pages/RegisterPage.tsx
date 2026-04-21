@@ -1,5 +1,5 @@
 import { isAxiosError } from 'axios'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { useAuth } from '@/auth/AuthContext'
@@ -19,6 +19,27 @@ export function RegisterPage() {
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isResending, setIsResending] = useState(false)
+  const [resendCooldownEndsAt, setResendCooldownEndsAt] = useState<number | null>(null)
+  const [cooldownSeconds, setCooldownSeconds] = useState(0)
+
+  useEffect(() => {
+    if (!resendCooldownEndsAt) {
+      setCooldownSeconds(0)
+      return
+    }
+
+    const updateCooldown = () => {
+      const remaining = Math.max(0, Math.ceil((resendCooldownEndsAt - Date.now()) / 1000))
+      setCooldownSeconds(remaining)
+      if (remaining === 0) {
+        setResendCooldownEndsAt(null)
+      }
+    }
+
+    updateCooldown()
+    const interval = window.setInterval(updateCooldown, 1000)
+    return () => window.clearInterval(interval)
+  }, [resendCooldownEndsAt])
 
   if (isAuthenticated) {
     if (user?.must_change_password) {
@@ -40,6 +61,7 @@ export function RegisterPage() {
     try {
       const response = await api.register({ email, username, password })
       setFeedback(response.message)
+      setResendCooldownEndsAt(Date.now() + 60_000)
     } catch (submissionError) {
       setError(readErrorMessage(submissionError, 'Non sono riuscito a completare la registrazione.'))
     } finally {
@@ -54,6 +76,7 @@ export function RegisterPage() {
     try {
       const response = await api.resendConfirmation({ email })
       setFeedback(response.message)
+      setResendCooldownEndsAt(Date.now() + 60_000)
     } catch (submissionError) {
       setError(readErrorMessage(submissionError, 'Non sono riuscito a inviare una nuova email di conferma.'))
     } finally {
@@ -97,8 +120,8 @@ export function RegisterPage() {
               <Link className="text-[var(--primary)]" to="/login">
                 Hai gia un account? Accedi
               </Link>
-              <Button disabled={!email || isResending} onClick={() => void handleResend()} size="sm" type="button" variant="ghost">
-                {isResending ? 'Invio...' : 'Reinvia email'}
+              <Button disabled={!email || isResending || cooldownSeconds > 0} onClick={() => void handleResend()} size="sm" type="button" variant="ghost">
+                {isResending ? 'Invio...' : cooldownSeconds > 0 ? `Reinvia tra ${cooldownSeconds}s` : 'Reinvia email'}
               </Button>
             </div>
           </CardContent>

@@ -1,6 +1,6 @@
 from app.models.user import UserRole
 from app.schemas.common import ORMModel
-from pydantic import EmailStr, Field
+from pydantic import EmailStr, Field, field_validator
 
 
 class UserRead(ORMModel):
@@ -18,17 +18,34 @@ class UserCreate(ORMModel):
     username: str = Field(min_length=2, max_length=120)
     password: str = Field(min_length=8, max_length=128)
 
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        return value.strip().lower()
+
 
 class UserUpdate(ORMModel):
     username: str | None = Field(default=None, min_length=2, max_length=120)
     password: str | None = Field(default=None, min_length=8, max_length=128)
     is_active: bool | None = None
 
+    @field_validator("username")
+    @classmethod
+    def normalize_optional_username(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip().lower()
+
 
 class PublicRegistrationRequest(ORMModel):
     email: EmailStr
     username: str = Field(min_length=2, max_length=120)
     password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        return value.strip().lower()
 
 
 class EmailConfirmationRequest(ORMModel):
