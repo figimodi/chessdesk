@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { AppShell } from '@/components/layout/AppShell'
+import { AlertCard } from '@/components/ui/alert-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -50,6 +51,7 @@ export function ProfilePage() {
 
   return (
     <AppShell>
+      {error ? <AlertCard message={error} onClose={() => setError(null)} /> : null}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <Card>
           <CardHeader>
@@ -101,7 +103,6 @@ export function ProfilePage() {
                 <Label htmlFor="profile-confirm-password">Conferma nuova password</Label>
                 <Input id="profile-confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
               </div>
-              {error ? <div className="text-sm text-red-600">{error}</div> : null}
               {success ? <div className="text-sm text-emerald-700">{success}</div> : null}
               <Button disabled={isSubmitting} type="submit">
                 {isSubmitting ? 'Aggiornamento...' : 'Aggiorna password'}
@@ -116,6 +117,8 @@ export function ProfilePage() {
 
 function readErrorMessage(error: unknown) {
   if (isAxiosError(error)) {
+    const message = error.response?.data?.message
+    if (typeof message === 'string') return message
     const detail = error.response?.data?.detail
     if (typeof detail === 'string') return detail
     return error.message || 'Non sono riuscito ad aggiornare la password.'

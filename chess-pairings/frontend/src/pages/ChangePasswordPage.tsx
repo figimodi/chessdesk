@@ -1,6 +1,8 @@
+import { isAxiosError } from 'axios'
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
+import { AlertCard } from '@/components/ui/alert-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -32,8 +34,8 @@ export function ChangePasswordPage() {
     setIsSubmitting(true)
     try {
       await changePassword(currentPassword, newPassword)
-    } catch {
-      setError('Non sono riuscito ad aggiornare la password.')
+    } catch (submissionError) {
+      setError(readErrorMessage(submissionError))
     } finally {
       setIsSubmitting(false)
     }
@@ -41,6 +43,7 @@ export function ChangePasswordPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--muted)] px-6 py-10">
+      {error ? <AlertCard message={error} onClose={() => setError(null)} /> : null}
       <Card className="w-full max-w-md border-0 shadow-lg">
         <CardHeader>
           <CardTitle>Cambia password</CardTitle>
@@ -60,7 +63,6 @@ export function ChangePasswordPage() {
               <Label htmlFor="confirm-password">Conferma nuova password</Label>
               <Input id="confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
             </div>
-            {error ? <div className="text-sm text-red-600">{error}</div> : null}
             <Button className="w-full" disabled={isSubmitting} type="submit">
               {isSubmitting ? 'Aggiornamento...' : 'Aggiorna password'}
             </Button>
@@ -69,4 +71,14 @@ export function ChangePasswordPage() {
       </Card>
     </div>
   )
+}
+
+function readErrorMessage(error: unknown) {
+  if (isAxiosError(error)) {
+    const message = error.response?.data?.message
+    if (typeof message === 'string') return message
+    const detail = error.response?.data?.detail
+    if (typeof detail === 'string') return detail
+  }
+  return 'Non sono riuscito ad aggiornare la password.'
 }

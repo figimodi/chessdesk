@@ -109,6 +109,10 @@ export function TournamentFormPage({ mode }: { mode: "create" | "edit" }) {
       round_schedule: form.round_schedule.filter((value) => value.trim() !== ""),
     };
 
+    if (!isAdmin) {
+      delete sanitizedForm.owner_id;
+    }
+
     try {
       if (mode === "create") {
         const tournament = await createMutation.mutateAsync(sanitizedForm);
@@ -186,13 +190,10 @@ export function TournamentFormPage({ mode }: { mode: "create" | "edit" }) {
 
 function readErrorMessage(error: unknown) {
   if (isAxiosError(error)) {
+    const message = error.response?.data?.message;
+    if (typeof message === "string") return message;
     const detail = error.response?.data?.detail;
     if (typeof detail === "string") return detail;
-    if (Array.isArray(detail) && detail.length > 0) {
-      const firstIssue = detail[0];
-      if (typeof firstIssue?.msg === "string") return firstIssue.msg.replace(/^Value error,\s*/i, "");
-    }
-    if (typeof error.response?.data?.message === "string") return error.response.data.message;
     return error.message;
   }
   if (error instanceof Error) return error.message;

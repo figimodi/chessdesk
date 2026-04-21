@@ -5,7 +5,9 @@ from app.services import user as user_service
 
 
 @pytest.mark.asyncio
-async def test_register_normalizes_username_and_sends_confirmation(client, outbox, session_factory):
+async def test_register_normalizes_username_and_sends_confirmation(
+    client, outbox, session_factory
+):
     response = await client.post(
         "/api/v1/auth/register",
         json={
@@ -44,17 +46,21 @@ async def test_register_rejects_duplicate_email_and_username(client, outbox):
 
     assert first_response.status_code == 201
     assert duplicate_email.status_code == 409
-    assert duplicate_email.json()["detail"] == "Esiste gia un account con questa email"
+    assert duplicate_email.json()["message"] == "Esiste gia un account con questa email"
     assert duplicate_username.status_code == 409
-    assert duplicate_username.json()["detail"] == "Esiste gia un account con questo username"
+    assert duplicate_username.json()["message"] == "Esiste gia un account con questo username"
 
 
 @pytest.mark.asyncio
 async def test_db_enforces_unique_normalized_username(session_factory):
     async with session_factory() as session:
-        await user_service.create_user(session, email="one@example.com", username="CaseUser", password="password123")
+        await user_service.create_user(
+            session, email="one@example.com", username="CaseUser", password="password123"
+        )
         with pytest.raises(IntegrityError):
-            await user_service.create_user(session, email="two@example.com", username="caseuser", password="password123")
+            await user_service.create_user(
+                session, email="two@example.com", username="caseuser", password="password123"
+            )
 
 
 @pytest.mark.asyncio
@@ -70,14 +76,18 @@ async def test_login_is_blocked_until_email_is_confirmed(client, outbox):
     )
 
     assert response.status_code == 403
-    assert "confermare" in response.json()["detail"]
+    assert "confermare" in response.json()["message"]
 
 
 @pytest.mark.asyncio
 async def test_resend_invalidates_previous_confirmation_token(client, outbox):
     await client.post(
         "/api/v1/auth/register",
-        json={"email": "confirm@example.com", "username": "confirmuser", "password": "password123"},
+        json={
+            "email": "confirm@example.com",
+            "username": "confirmuser",
+            "password": "password123",
+        },
     )
     first_token = outbox[-1]["token"]
 
@@ -96,7 +106,7 @@ async def test_resend_invalidates_previous_confirmation_token(client, outbox):
 
     assert resend_response.status_code == 200
     assert first_confirm.status_code == 400
-    assert "non e piu valido" in first_confirm.json()["detail"]
+    assert "non e piu valido" in first_confirm.json()["message"]
     assert second_confirm.status_code == 200
     assert login_response.status_code == 200
 
@@ -119,7 +129,7 @@ async def test_inactive_account_is_blocked_even_with_valid_password(client, sess
     )
 
     assert response.status_code == 403
-    assert "disattivato" in response.json()["detail"]
+    assert "disattivato" in response.json()["message"]
 
 
 @pytest.mark.asyncio

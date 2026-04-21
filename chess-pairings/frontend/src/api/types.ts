@@ -231,6 +231,27 @@ export type TournamentPublicRegistration = {
   last_name?: string
 }
 
+export type PublicTeamRegistrationCreate = {
+  team_name: string
+  captain: TournamentPublicRegistration
+  teammate_player_ids: number[]
+  teammate_fide_ids: string[]
+  teammate_manual_entries: TournamentPublicRegistration[]
+}
+
+export type PublicTeamRegistrationJoin = {
+  team_id: number
+  pin: string
+  registrant: TournamentPublicRegistration
+}
+
+export type PublicTeamRegistrationCreateResponse = {
+  team_id: number
+  team_name: string
+  pin: string
+  members_count: number
+}
+
 export type PasswordChangeRequest = {
   current_password: string
   new_password: string

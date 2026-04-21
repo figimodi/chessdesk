@@ -38,6 +38,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { queryClient } from "@/api/queryClient";
 import { getFederationFlagUrl } from "@/lib/federationFlags";
 import { useAuth } from "@/auth/AuthContext";
+import { TournamentHeroCard } from "@/components/tournaments/TournamentHeroCard";
 import { TournamentRegistrationDialog } from "@/components/tournaments/TournamentRegistrationDialog";
 
 export function TournamentDetailPage() {
@@ -191,8 +192,7 @@ export function TournamentDetailPage() {
     tournament?.is_registration_closed && generatedRounds.length < (tournament?.rounds_count ?? 0) && allResultsEnteredForLatestRound;
   const showConcludeTournament =
     !!tournament?.is_registration_closed && generatedRounds.length === (tournament?.rounds_count ?? 0) && generatedRounds.length > 0;
-  const canConcludeTournament =
-    showConcludeTournament && allResultsEnteredForLatestRound;
+  const canConcludeTournament = showConcludeTournament && allResultsEnteredForLatestRound;
   const tieBreakLabels: Record<string, string> = {
     buchholz_cut1: "BH/C1",
     buchholz: "BH",
@@ -205,7 +205,8 @@ export function TournamentDetailPage() {
     head_to_head: "Class. avulsa (PS/PI)",
     weighted_sonneborn: "Sonneborn pes.",
   };
-  const visibleStandingsTieBreaks = tournament?.tie_breaks.filter((criterion) => criterion !== "direct_encounter" && criterion !== "wins_black") ?? [];
+  const visibleStandingsTieBreaks =
+    tournament?.tie_breaks.filter((criterion) => criterion !== "direct_encounter" && criterion !== "wins_black") ?? [];
   const visibleTeamTieBreaks = tournament?.tie_breaks ?? [];
 
   useEffect(() => {
@@ -251,9 +252,7 @@ export function TournamentDetailPage() {
 
   return (
     <AppShell>
-      {isRegistrationDialogOpen ? (
-        <TournamentRegistrationDialog onClose={() => setIsRegistrationDialogOpen(false)} tournament={tournament} />
-      ) : null}
+      {isRegistrationDialogOpen ? <TournamentRegistrationDialog onClose={() => setIsRegistrationDialogOpen(false)} tournament={tournament} /> : null}
       {alertMessage ? <AlertCard message={alertMessage} onClose={() => setAlertMessage("")} /> : null}
       <ConfirmDialog
         open={confirmDialog !== null}
@@ -294,47 +293,21 @@ export function TournamentDetailPage() {
         />
       ) : null}
       <section className="mb-8">
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-center gap-3">
-              <CardTitle className="text-3xl">{tournament.name}</CardTitle>
-              <Badge>{tournament.type === "team" ? "Squadre" : "Individuale"}</Badge>
-              {tournament.is_private ? <Badge>Privato</Badge> : null}
-            </div>
-            <CardDescription>{tournament.description ?? "Nessuna descrizione disponibile."}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              <DetailHighlightCard icon={<MapPin className="h-4 w-4" />} label="Luogo" value={tournament.venue ?? "Sede da definire"} />
-              <DetailHighlightCard icon={<CalendarDays className="h-4 w-4" />} label="Date" value={formatTournamentDates(tournament.start_date, tournament.end_date, tournament.rounds)} />
-            </div>
-            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div className="flex flex-wrap gap-2">
-                <InfoChip icon={<ChartColumn className="h-4 w-4" />} label={tournament.is_elo_rated ? "Variazione Elo" : "No variazione Elo"} />
-                {tournament.bulletin_url ? (
-                  <InfoChip
-                    icon={<Paperclip className="h-4 w-4" />}
-                    label="Bando"
-                    href={tournament.bulletin_url}
-                  />
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-2 text-sm text-[var(--muted-foreground)] md:justify-end">
-                <InfoChip icon={timeControlIcon(tournament.time_control_category)} label={tournament.time_control} />
-                <InfoChip
-                  icon={tournament.type === "team" ? <Users className="h-4 w-4" /> : <User className="h-4 w-4" />}
-                  label={`${tournament.type === "team" ? tournament.teams_count : tournament.players_count} ${participantLabel.toLowerCase()}`}
-                />
-                <InfoChip icon={<Hash className="h-4 w-4" />} label={`${tournament.rounds_count} turni`} />
-              </div>
-            </div>
-            {!tournament.is_private && !tournament.is_registration_closed ? (
-              <div className="flex flex-wrap gap-3">
-                <Button onClick={() => setIsRegistrationDialogOpen(true)} variant="outline">Iscriviti al torneo</Button>
-              </div>
-            ) : null}
-            {canManage ? (
-              <div className="flex flex-wrap gap-3">
+        <TournamentHeroCard
+          bulletinUrl={tournament.bulletin_url}
+          datesLabel={formatTournamentDates(tournament.start_date, tournament.end_date, tournament.rounds)}
+          description={tournament.description}
+          isEloRated={tournament.is_elo_rated}
+          isOwner={user?.id === tournament.owner_id}
+          isPrivate={tournament.is_private}
+          name={tournament.name}
+          onRegister={!tournament.is_private && !tournament.is_registration_closed ? () => setIsRegistrationDialogOpen(true) : undefined}
+          participantsLabel={`${tournament.type === "team" ? tournament.teams_count : tournament.players_count}`}
+          registerButtonLabel="Iscriviti"
+          roundsLabel={`${tournament.rounds_count} turni`}
+          secondaryActions={
+            canManage ? (
+              <>
                 <Button variant="secondary" asChild className="bg-yellow-100 text-yellow-900 hover:bg-yellow-200 border border-yellow-200">
                   <Link to={`/tournaments/${tournament.id}/edit`}>Modifica</Link>
                 </Button>
@@ -355,10 +328,14 @@ export function TournamentDetailPage() {
                 >
                   Elimina
                 </Button>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+              </>
+            ) : null
+          }
+          timeControl={tournament.time_control}
+          timeControlCategory={tournament.time_control_category}
+          type={tournament.type}
+          venueLabel={tournament.venue ?? "Sede da definire"}
+        />
       </section>
 
       <section className="space-y-4">
@@ -387,88 +364,88 @@ export function TournamentDetailPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               {canManage ? (
-              <Card className="border border-dashed">
-                <CardHeader>
-                  <CardTitle className="text-lg">Ricerca giocatori</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Input
-                    placeholder="Cerca giocatore per nome o ID FIDE"
-                    value={catalogQuery}
-                    onChange={(event) => setCatalogQuery(event.target.value)}
-                  />
+                <Card className="border border-dashed">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Ricerca giocatori</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <Input
+                      placeholder="Cerca giocatore per nome o ID FIDE"
+                      value={catalogQuery}
+                      onChange={(event) => setCatalogQuery(event.target.value)}
+                    />
 
-                  {debouncedCatalogQuery.trim().length >= 2 ? (
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-12" />
-                            <TableHead>Nome</TableHead>
-                            <TableHead>FIDE ID</TableHead>
-                            <TableHead>FED</TableHead>
-                            <TableHead>{catalogRatingLabel}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {paginatedCatalogPlayers.map((player) => (
-                            <TableRow key={player.fide_id}>
-                              <TableCell className="text-center">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleAddParticipant(player.fide_id)}
-                                  aria-label="Importa giocatore"
-                                >
-                                  +
-                                </Button>
-                              </TableCell>
-                              <TableCell className="min-w-56">{player.full_name}</TableCell>
-                              <TableCell>{player.fide_id}</TableCell>
-                              <TableCell>
-                                <FederationCell federation={player.federation} />
-                              </TableCell>
-                              <TableCell>{getCatalogRating(player)}</TableCell>
-                            </TableRow>
-                          ))}
-                          {!unassignedCatalogPlayers.length ? (
+                    {debouncedCatalogQuery.trim().length >= 2 ? (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
                             <TableRow>
-                              <TableCell colSpan={5}>
-                                {isSearchingCatalog ? "Ricerca in corso..." : "Nessun giocatore disponibile da aggiungere."}
-                              </TableCell>
+                              <TableHead className="w-12" />
+                              <TableHead>Nome</TableHead>
+                              <TableHead>FIDE ID</TableHead>
+                              <TableHead>FED</TableHead>
+                              <TableHead>{catalogRatingLabel}</TableHead>
                             </TableRow>
-                          ) : null}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : null}
-                  {debouncedCatalogQuery.trim().length >= 2 && unassignedCatalogPlayers.length > catalogPageSize ? (
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm text-[var(--muted-foreground)]">
-                        Pagina {safeCatalogPage} di {catalogTotalPages}
+                          </TableHeader>
+                          <TableBody>
+                            {paginatedCatalogPlayers.map((player) => (
+                              <TableRow key={player.fide_id}>
+                                <TableCell className="text-center">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleAddParticipant(player.fide_id)}
+                                    aria-label="Importa giocatore"
+                                  >
+                                    +
+                                  </Button>
+                                </TableCell>
+                                <TableCell className="min-w-56">{player.full_name}</TableCell>
+                                <TableCell>{player.fide_id}</TableCell>
+                                <TableCell>
+                                  <FederationCell federation={player.federation} />
+                                </TableCell>
+                                <TableCell>{getCatalogRating(player)}</TableCell>
+                              </TableRow>
+                            ))}
+                            {!unassignedCatalogPlayers.length ? (
+                              <TableRow>
+                                <TableCell colSpan={5}>
+                                  {isSearchingCatalog ? "Ricerca in corso..." : "Nessun giocatore disponibile da aggiungere."}
+                                </TableCell>
+                              </TableRow>
+                            ) : null}
+                          </TableBody>
+                        </Table>
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={safeCatalogPage <= 1}
-                          onClick={() => setCatalogPage((current) => Math.max(1, current - 1))}
-                        >
-                          Prec.
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={safeCatalogPage >= catalogTotalPages}
-                          onClick={() => setCatalogPage((current) => Math.min(catalogTotalPages, current + 1))}
-                        >
-                          Succ.
-                        </Button>
+                    ) : null}
+                    {debouncedCatalogQuery.trim().length >= 2 && unassignedCatalogPlayers.length > catalogPageSize ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm text-[var(--muted-foreground)]">
+                          Pagina {safeCatalogPage} di {catalogTotalPages}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={safeCatalogPage <= 1}
+                            onClick={() => setCatalogPage((current) => Math.max(1, current - 1))}
+                          >
+                            Prec.
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={safeCatalogPage >= catalogTotalPages}
+                            onClick={() => setCatalogPage((current) => Math.min(catalogTotalPages, current + 1))}
+                          >
+                            Succ.
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
+                    ) : null}
+                  </CardContent>
+                </Card>
               ) : null}
 
               <div className="overflow-x-auto">
@@ -488,14 +465,14 @@ export function TournamentDetailPage() {
                     {sortedParticipants.map((player, index) => (
                       <TableRow
                         key={player.player_id}
-                         className={[
-                           !canManage ? "cursor-default" : "cursor-pointer",
-                           selectedParticipantId === player.player_id ? "bg-[var(--muted)]" : "",
-                         ].join(" ")}
-                         onClick={() => {
-                           if (!canManage) return;
-                           setSelectedParticipantId((current) => current === player.player_id ? null : player.player_id);
-                           }}
+                        className={[
+                          !canManage ? "cursor-default" : "cursor-pointer",
+                          selectedParticipantId === player.player_id ? "bg-[var(--muted)]" : "",
+                        ].join(" ")}
+                        onClick={() => {
+                          if (!canManage) return;
+                          setSelectedParticipantId((current) => (current === player.player_id ? null : player.player_id));
+                        }}
                       >
                         <TableCell>{player.seed_number ?? index + 1}</TableCell>
                         <TableCell className="min-w-56">{player.full_name}</TableCell>
@@ -515,31 +492,28 @@ export function TournamentDetailPage() {
               {canManage && selectedParticipantId ? (
                 <div className="flex justify-end gap-3">
                   {tournament.type !== "team" ? (
-                    <Button
-                      variant="outline"
-                      onClick={() => setSelectedPlayerForManagement(selectedParticipantId)}
-                    >
+                    <Button variant="outline" onClick={() => setSelectedPlayerForManagement(selectedParticipantId)}>
                       Gestisci partecipante
                     </Button>
                   ) : null}
                   <Button
                     variant="destructive"
                     onClick={() => {
-                      const selectedParticipant = sortedParticipants.find((player) => player.player_id === selectedParticipantId)
-                      if (!selectedParticipant) return
+                      const selectedParticipant = sortedParticipants.find((player) => player.player_id === selectedParticipantId);
+                      if (!selectedParticipant) return;
                       setConfirmDialog({
                         title: "Rimuovi partecipante",
                         description: `Vuoi davvero rimuovere ${selectedParticipant.full_name} dal torneo?`,
                         confirmLabel: "Rimuovi partecipante",
                         confirmVariant: "destructive",
                         action: async () => {
-                          await removePlayerMutation.mutateAsync(selectedParticipant.player_id)
-                          setSelectedParticipantId(null)
+                          await removePlayerMutation.mutateAsync(selectedParticipant.player_id);
+                          setSelectedParticipantId(null);
                           if (selectedPlayerForManagement === selectedParticipant.player_id) {
-                            setSelectedPlayerForManagement(null)
+                            setSelectedPlayerForManagement(null);
                           }
                         },
-                      })
+                      });
                     }}
                   >
                     Elimina partecipante
@@ -547,37 +521,39 @@ export function TournamentDetailPage() {
                 </div>
               ) : null}
 
-              {canManage ? <div className="flex justify-end">
-                <Button
-                  variant={tournament.is_registration_closed ? "destructive" : "default"}
-                  onClick={() => {
-                    if (tournament.is_registration_closed) {
+              {canManage ? (
+                <div className="flex justify-end">
+                  <Button
+                    variant={tournament.is_registration_closed ? "destructive" : "default"}
+                    onClick={() => {
+                      if (tournament.is_registration_closed) {
+                        setConfirmDialog({
+                          title: "Riapri iscrizioni",
+                          description: "Sei sicuro di voler riaprire le iscrizioni del torneo?",
+                          confirmLabel: "Riapri iscrizioni",
+                          confirmVariant: "destructive",
+                          action: async () => {
+                            await reopenRegistrationMutation.mutateAsync();
+                          },
+                        });
+                        return;
+                      }
                       setConfirmDialog({
-                        title: "Riapri iscrizioni",
-                        description: "Sei sicuro di voler riaprire le iscrizioni del torneo?",
-                        confirmLabel: "Riapri iscrizioni",
-                        confirmVariant: "destructive",
+                        title: "Chiudi iscrizioni",
+                        description:
+                          "Sei sicuro di voler chiudere le iscrizioni del torneo? Dopo la chiusura non potrai aggiungere altri partecipanti.",
+                        confirmLabel: "Chiudi iscrizioni",
                         action: async () => {
-                          await reopenRegistrationMutation.mutateAsync();
+                          await closeRegistrationMutation.mutateAsync();
                         },
                       });
-                      return;
-                    }
-                    setConfirmDialog({
-                      title: "Chiudi iscrizioni",
-                      description:
-                        "Sei sicuro di voler chiudere le iscrizioni del torneo? Dopo la chiusura non potrai aggiungere altri partecipanti.",
-                      confirmLabel: "Chiudi iscrizioni",
-                      action: async () => {
-                        await closeRegistrationMutation.mutateAsync();
-                      },
-                    });
-                  }}
-                  disabled={closeRegistrationMutation.isPending || reopenRegistrationMutation.isPending}
-                >
-                  {tournament.is_registration_closed ? "Riapri iscrizioni" : "Chiudi iscrizioni"}
-                </Button>
-              </div> : null}
+                    }}
+                    disabled={closeRegistrationMutation.isPending || reopenRegistrationMutation.isPending}
+                  >
+                    {tournament.is_registration_closed ? "Riapri iscrizioni" : "Chiudi iscrizioni"}
+                  </Button>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         ) : null}
@@ -673,12 +649,18 @@ export function TournamentDetailPage() {
                                     <TableBody>
                                       {sortedStandings
                                         .filter((standing) => standing.team_id === entry.team_id)
-                                        .sort((left, right) => (left.team_board_order ?? 10 ** 9) - (right.team_board_order ?? 10 ** 9) || left.full_name.localeCompare(right.full_name))
+                                        .sort(
+                                          (left, right) =>
+                                            (left.team_board_order ?? 10 ** 9) - (right.team_board_order ?? 10 ** 9) ||
+                                            left.full_name.localeCompare(right.full_name),
+                                        )
                                         .map((standing) => (
                                           <TableRow key={standing.player_id}>
                                             <TableCell>{standing.seed_number ?? "-"}</TableCell>
                                             <TableCell>{standing.full_name}</TableCell>
-                                            <TableCell><FederationCell federation={standing.federation} /></TableCell>
+                                            <TableCell>
+                                              <FederationCell federation={standing.federation} />
+                                            </TableCell>
                                             <TableCell>{formatScore(standing.points)}</TableCell>
                                             <TableCell>{getStandingRating(standing, tournament.time_control_category)}</TableCell>
                                             <TableCell>{standing.average_opponent_rating ?? "-"}</TableCell>
@@ -787,14 +769,14 @@ function InfoChip({ icon, label, href }: { icon: ReactNode; label: string; href?
   const content = (
     <>
       <span className="text-[var(--muted-foreground)]">{icon}</span>
-      <span>{label}</span>
+      <span className="text-[var(--muted-foreground)]">{label}</span>
     </>
   );
 
   if (href) {
     return (
       <a
-        className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-2 hover:bg-[var(--muted)]"
+        className="inline-flex items-center gap-2 rounded-full border bg-white px-2.5 py-1 text-xs hover:bg-[var(--muted)]"
         href={href}
         target="_blank"
         rel="noreferrer"
@@ -804,16 +786,16 @@ function InfoChip({ icon, label, href }: { icon: ReactNode; label: string; href?
     );
   }
 
-  return <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-2">{content}</div>;
+  return <div className="inline-flex items-center gap-2 rounded-full border bg-white px-2.5 py-1 text-xs">{content}</div>;
 }
 
-function DetailHighlightCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+function InlineDetail({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div className="flex h-full items-start gap-3 rounded-2xl border bg-[var(--muted)] px-4 py-4">
-      <div className="rounded-xl border bg-white p-2 text-[var(--muted-foreground)]">{icon}</div>
+    <div className="flex min-w-0 items-start gap-3">
+      <div className="rounded-2xl border bg-white p-2.5 text-slate-500 shadow-sm">{icon}</div>
       <div className="min-w-0">
-        <div className="text-sm text-[var(--muted-foreground)]">{label}</div>
-        <div className="mt-1 text-base font-medium text-[var(--foreground)]">{value}</div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</div>
+        <div className="mt-1 text-base font-semibold leading-tight text-slate-900">{value}</div>
       </div>
     </div>
   );
@@ -841,10 +823,10 @@ function formatMonthDay(value: string) {
 }
 
 function FederationCell({ federation }: { federation?: string | null }) {
-  const countryCode = getFederationFlagUrl(federation);
+  const flagUrl = getFederationFlagUrl(federation);
   return (
     <div className="flex items-center gap-2">
-      {countryCode ? <span className={`fi fi-${countryCode} fis rounded-sm`} /> : null}
+      {flagUrl ? <img alt={federation ?? "Federation"} className="h-4 w-5 rounded-sm object-cover" src={flagUrl} /> : null}
       <span>{federation ?? "-"}</span>
     </div>
   );
@@ -964,6 +946,7 @@ function PlayerAvailabilityDialog({
 
 function readErrorMessage(error: unknown) {
   if (isAxiosError(error)) {
+    if (typeof error.response?.data?.message === "string") return error.response.data.message;
     return typeof error.response?.data?.detail === "string" ? error.response.data.detail : error.message;
   }
   if (error instanceof Error) return error.message;

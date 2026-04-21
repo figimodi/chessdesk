@@ -4,6 +4,7 @@ import { Link, Navigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { useAuth } from '@/auth/AuthContext'
 import { AppShell } from '@/components/layout/AppShell'
+import { AlertCard } from '@/components/ui/alert-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -86,6 +87,7 @@ export function RegisterPage() {
 
   return (
     <AppShell>
+      {error ? <AlertCard message={error} onClose={() => setError(null)} /> : null}
       <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center px-6 py-10">
         <Card className="w-full max-w-md border-0 shadow-lg">
           <CardHeader>
@@ -110,7 +112,6 @@ export function RegisterPage() {
                 <Label htmlFor="register-confirm-password">Conferma password</Label>
                 <Input id="register-confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />
               </div>
-              {error ? <div className="text-sm text-red-600">{error}</div> : null}
               {feedback ? <div className="text-sm text-emerald-700">{feedback}</div> : null}
               <Button className="w-full" disabled={isSubmitting} type="submit">
                 {isSubmitting ? 'Registrazione...' : 'Registrati'}
@@ -133,6 +134,8 @@ export function RegisterPage() {
 
 function readErrorMessage(error: unknown, fallback: string) {
   if (isAxiosError(error)) {
+    const message = error.response?.data?.message
+    if (typeof message === 'string') return message
     const detail = error.response?.data?.detail
     if (typeof detail === 'string') return detail
     if (Array.isArray(detail) && detail.length > 0) {

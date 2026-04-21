@@ -268,9 +268,9 @@ function PlayerMatchCard({
 }
 
 function FederationFlag({ federation }: { federation?: string | null }) {
-  const countryCode = getFederationFlagUrl(federation);
-  if (!countryCode) return null;
-  return <span className={`fi fi-${countryCode} fis rounded-sm`} />;
+  const flagUrl = getFederationFlagUrl(federation);
+  if (!flagUrl) return null;
+  return <img alt={federation ?? "Federation"} className="h-4 w-5 rounded-sm object-cover" src={flagUrl} />;
 }
 
 function renderCompactResult(pairing: { result: PairingResult; is_bye: boolean }) {

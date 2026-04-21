@@ -1,6 +1,6 @@
 import { api } from "@/api/client";
 import { QueryCacheKeys } from "@/api/queryCacheKeys";
-import type { TournamentCreate, TournamentPublicRegistration, TournamentUpdate } from "@/api/types";
+import type { PublicTeamRegistrationCreate, PublicTeamRegistrationJoin, TournamentCreate, TournamentPublicRegistration, TournamentUpdate } from "@/api/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function useTournaments() {
@@ -154,6 +154,28 @@ export function usePublicTournamentRegistration(tournamentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: TournamentPublicRegistration) => api.registerToTournament(tournamentId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournaments });
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournament(tournamentId) });
+    },
+  });
+}
+
+export function useCreatePublicTeamRegistration(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: PublicTeamRegistrationCreate) => api.createPublicTeamRegistration(tournamentId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournaments });
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournament(tournamentId) });
+    },
+  });
+}
+
+export function useJoinPublicTeamRegistration(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: PublicTeamRegistrationJoin) => api.joinPublicTeamRegistration(tournamentId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournaments });
       queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournament(tournamentId) });

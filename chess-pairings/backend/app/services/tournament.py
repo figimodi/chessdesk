@@ -1,3 +1,4 @@
+import secrets
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
@@ -11,7 +12,7 @@ from app.models.team import Team
 from app.models.user import UserRole
 from app.models.tournament import Tournament, TournamentPlayer, TournamentPlayerAvailability
 from app.models.user import User
-from app.schemas.team import TeamRead
+from app.schemas.team import PublicRegistrantIdentity, PublicTeamRegistrationCreate, PublicTeamRegistrationCreateResponse, PublicTeamRegistrationJoin, TeamMemberAssign, TeamRead
 from app.schemas.tournament import (
     TournamentCreate,
     TournamentDetail,
@@ -72,6 +73,8 @@ def can_view_tournament(tournament: Tournament, user: User | None) -> bool:
         return True
     if user is None:
         return False
+    if user.role == UserRole.admin:
+        return True
     return tournament.owner_id == user.id
 
 
@@ -133,6 +136,11 @@ async def create_tournament(db: AsyncSession, data: TournamentCreate, owner: Use
             payload["match_points_draw"] = 1
         if payload.get("match_points_loss") is None:
             payload["match_points_loss"] = 0
+        _validate_team_tournament_limits(
+            max_players_per_team=data.max_players_per_team,
+            boards_per_match=data.boards_per_match,
+            existing_team_member_counts=[],
+        )
     tournament = Tournament(**payload, tie_breaks=_serialize_tie_breaks(data.tie_breaks), owner_id=owner.id)
     db.add(tournament)
     await db.flush()
@@ -163,6 +171,16 @@ async def update_tournament(
         if new_owner is None:
             raise HTTPException(status_code=404, detail="Utente proprietario non trovato")
 
+    next_max_players_per_team = data.max_players_per_team if data.max_players_per_team is not None else tournament.max_players_per_team
+    next_boards_per_match = data.boards_per_match if data.boards_per_match is not None else tournament.boards_per_match
+    existing_team_member_counts = [len(team.members) for team in tournament.teams]
+    if (data.type or tournament.type) == "team":
+        _validate_team_tournament_limits(
+            max_players_per_team=next_max_players_per_team,
+            boards_per_match=next_boards_per_match,
+            existing_team_member_counts=existing_team_member_counts,
+        )
+
     for key, value in payload.items():
         setattr(tournament, key, value)
 
@@ -180,6 +198,27 @@ async def update_tournament(
 
     await db.commit()
     return await _get_tournament_unscoped(db, tournament.id)
+
+
+def _validate_team_tournament_limits(
+    *,
+    max_players_per_team: int | None,
+    boards_per_match: int | None,
+    existing_team_member_counts: list[int],
+) -> None:
+    if max_players_per_team is not None and boards_per_match is not None and boards_per_match > max_players_per_team:
+        raise HTTPException(
+            status_code=409,
+            detail="I giocatori schierati per incontro non possono superare il numero massimo di giocatori per squadra.",
+        )
+
+    if max_players_per_team is not None:
+        current_max_members = max(existing_team_member_counts, default=0)
+        if current_max_members > max_players_per_team:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Non puoi impostare meno di {current_max_members} giocatori per squadra: esiste gia una squadra con {current_max_members} giocatori.",
+            )
 
 
 async def delete_tournament(db: AsyncSession, tournament: Tournament) -> None:
@@ -288,6 +327,197 @@ async def register_public_player(
         tournament,
         TournamentPlayerAssign(player_id=player.id),
     )
+
+
+async def register_public_team(
+    db: AsyncSession, tournament: Tournament, data: PublicTeamRegistrationCreate
+) -> PublicTeamRegistrationCreateResponse:
+    tournament_id = tournament.id
+    _ensure_public_team_registration_allowed(tournament)
+
+    if any(team.name.strip().lower() == data.team_name.strip().lower() for team in tournament.teams):
+        raise HTTPException(status_code=409, detail="Esiste gia una squadra con questo nome")
+
+    captain_entry = await _resolve_public_registration_entry(db, tournament, data.captain)
+    if captain_entry.team_id is not None:
+        raise HTTPException(status_code=409, detail="Il capitano risulta gia assegnato a una squadra")
+
+    join_pin = _generate_team_join_pin(tournament)
+    team = Team(tournament_id=tournament_id, name=data.team_name.strip(), join_pin=join_pin)
+    db.add(team)
+    await db.commit()
+
+    db.expire_all()
+    refreshed_tournament = await _get_tournament_unscoped(db, tournament_id)
+    created_team = await team_service.get_team(db, team.id)
+    if created_team is None:
+        raise HTTPException(status_code=500, detail="Non sono riuscito a creare la squadra")
+
+    created_team = await team_service.assign_member(
+        db,
+        refreshed_tournament,
+        created_team,
+        TeamMemberAssign(player_id=captain_entry.player_id),
+    )
+
+    processed_player_ids = {captain_entry.player_id}
+
+    for player_id in data.teammate_player_ids:
+        if player_id in processed_player_ids:
+            continue
+        db.expire_all()
+        refreshed_tournament = await _get_tournament_unscoped(db, tournament_id)
+        created_team_model = next(team for team in refreshed_tournament.teams if team.id == created_team.id)
+        created_team = await team_service.assign_member(
+            db,
+            refreshed_tournament,
+            created_team_model,
+            TeamMemberAssign(player_id=player_id),
+        )
+        processed_player_ids.add(player_id)
+
+    for fide_id in data.teammate_fide_ids:
+        db.expire_all()
+        refreshed_tournament = await _get_tournament_unscoped(db, tournament_id)
+        teammate_entry = await _resolve_public_registration_entry(
+            db,
+            refreshed_tournament,
+            PublicRegistrantIdentity(fide_id=fide_id),
+        )
+        if teammate_entry.player_id in processed_player_ids:
+            continue
+        if teammate_entry.team_id is not None:
+            raise HTTPException(status_code=409, detail="Uno dei giocatori selezionati appartiene gia a una squadra")
+        db.expire_all()
+        refreshed_tournament = await _get_tournament_unscoped(db, tournament_id)
+        created_team_model = next(team for team in refreshed_tournament.teams if team.id == created_team.id)
+        created_team = await team_service.assign_member(
+            db,
+            refreshed_tournament,
+            created_team_model,
+            TeamMemberAssign(player_id=teammate_entry.player_id),
+        )
+        processed_player_ids.add(teammate_entry.player_id)
+
+    for manual_identity in data.teammate_manual_entries:
+        refreshed_tournament = await _get_tournament_unscoped(db, tournament_id)
+        teammate_entry = await _resolve_public_registration_entry(
+            db,
+            refreshed_tournament,
+            manual_identity,
+        )
+        if teammate_entry.player_id in processed_player_ids:
+            continue
+        if teammate_entry.team_id is not None:
+            raise HTTPException(status_code=409, detail="Uno dei giocatori selezionati appartiene gia a una squadra")
+        db.expire_all()
+        refreshed_tournament = await _get_tournament_unscoped(db, tournament_id)
+        created_team_model = next(team for team in refreshed_tournament.teams if team.id == created_team.id)
+        created_team = await team_service.assign_member(
+            db,
+            refreshed_tournament,
+            created_team_model,
+            TeamMemberAssign(player_id=teammate_entry.player_id),
+        )
+        processed_player_ids.add(teammate_entry.player_id)
+
+    db.expire_all()
+    refreshed_tournament = await _get_tournament_unscoped(db, tournament_id)
+    members_count = sum(1 for player in refreshed_tournament.players if player.team_id == created_team.id)
+
+    return PublicTeamRegistrationCreateResponse(
+        team_id=created_team.id,
+        team_name=created_team.name,
+        pin=join_pin,
+        members_count=members_count,
+    )
+
+
+async def join_public_team(
+    db: AsyncSession, tournament: Tournament, data: PublicTeamRegistrationJoin
+) -> TournamentPlayer:
+    tournament_id = tournament.id
+    _ensure_public_team_registration_allowed(tournament)
+    team = next((item for item in tournament.teams if item.id == data.team_id), None)
+    if team is None:
+        raise HTTPException(status_code=404, detail="Squadra non trovata")
+    if team.join_pin != data.pin.strip():
+        raise HTTPException(status_code=409, detail="PIN squadra non valido")
+
+    entry = await _resolve_public_registration_entry(db, tournament, data.registrant)
+    if entry.team_id is not None:
+        raise HTTPException(status_code=409, detail="Il giocatore risulta gia assegnato a una squadra")
+
+    db.expire_all()
+    refreshed_tournament = await _get_tournament_unscoped(db, tournament_id)
+    refreshed_team = next(item for item in refreshed_tournament.teams if item.id == data.team_id)
+    await team_service.assign_member(
+        db,
+        refreshed_tournament,
+        refreshed_team,
+        TeamMemberAssign(player_id=entry.player_id),
+    )
+    db.expire_all()
+    refreshed_tournament = await _get_tournament_unscoped(db, tournament_id)
+    return next(item for item in refreshed_tournament.players if item.player_id == entry.player_id)
+
+
+def _ensure_public_team_registration_allowed(tournament: Tournament) -> None:
+    if tournament.type != "team":
+        raise HTTPException(status_code=409, detail="Questa funzionalita e disponibile solo per i tornei a squadre")
+    if tournament.is_registration_closed:
+        raise HTTPException(status_code=409, detail="Tournament registration is closed")
+
+
+async def _resolve_public_registration_entry(
+    db: AsyncSession,
+    tournament: Tournament,
+    identity: TournamentPublicRegistration | PublicRegistrantIdentity,
+) -> TournamentPlayer:
+    if identity.fide_id:
+        existing_fide_entry = next(
+            (
+                entry
+                for entry in tournament.players
+                if entry.player.fide_id and entry.player.fide_id == identity.fide_id.strip()
+            ),
+            None,
+        )
+        if existing_fide_entry is not None:
+            return existing_fide_entry
+        player = await player_service.import_player_from_fide(db, identity.fide_id)
+    else:
+        full_name = f"{(identity.last_name or '').strip()}, {(identity.first_name or '').strip()}"
+        existing_manual_entry = next(
+            (
+                entry
+                for entry in tournament.players
+                if entry.player.full_name.strip().lower() == full_name.lower()
+            ),
+            None,
+        )
+        if existing_manual_entry is not None:
+            return existing_manual_entry
+        player = await player_service.create_public_manual_player(
+            db,
+            first_name=identity.first_name or "",
+            last_name=identity.last_name or "",
+        )
+
+    return await assign_player(
+        db,
+        tournament,
+        TournamentPlayerAssign(player_id=player.id),
+    )
+
+
+def _generate_team_join_pin(tournament: Tournament) -> str:
+    used_pins = {team.join_pin for team in tournament.teams}
+    for _ in range(1000):
+        candidate = f"{secrets.randbelow(10000):04d}"
+        if candidate not in used_pins:
+            return candidate
+    raise HTTPException(status_code=500, detail="Non sono riuscito a generare un PIN squadra")
 
 
 async def remove_player(
@@ -483,6 +713,9 @@ def serialize_tournament_list_item(
     tournament: Tournament, user: User | None = None
 ) -> TournamentListItem:
     is_team_tournament = tournament.type == "team"
+    raw_max_players_per_team = tournament.max_players_per_team if tournament.max_players_per_team is not None else 6
+    raw_boards_per_match = tournament.boards_per_match if tournament.boards_per_match is not None else 4
+    safe_max_players_per_team = max(raw_max_players_per_team, raw_boards_per_match) if is_team_tournament else None
     return TournamentListItem(
         id=tournament.id,
         name=tournament.name,
@@ -495,8 +728,8 @@ def serialize_tournament_list_item(
         pairings_system=tournament.pairings_system,
         tie_breaks=_deserialize_tie_breaks(tournament.tie_breaks),
         is_elo_rated=tournament.is_elo_rated,
-        max_players_per_team=(tournament.max_players_per_team if tournament.max_players_per_team is not None else 6) if is_team_tournament else None,
-        boards_per_match=(tournament.boards_per_match if tournament.boards_per_match is not None else 4) if is_team_tournament else None,
+        max_players_per_team=safe_max_players_per_team,
+        boards_per_match=raw_boards_per_match if is_team_tournament else None,
         enforce_board_order=tournament.enforce_board_order,
         match_points_win=(tournament.match_points_win if tournament.match_points_win is not None else 2) if is_team_tournament else None,
         match_points_draw=(tournament.match_points_draw if tournament.match_points_draw is not None else 1) if is_team_tournament else None,

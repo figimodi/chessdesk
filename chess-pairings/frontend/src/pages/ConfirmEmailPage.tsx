@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '@/api/client'
 import { AppShell } from '@/components/layout/AppShell'
+import { AlertCard } from '@/components/ui/alert-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -28,6 +29,7 @@ export function ConfirmEmailPage() {
 
   return (
     <AppShell>
+      {status === 'error' ? <AlertCard message={message} onClose={() => setStatus('success')} /> : null}
       <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center px-6 py-10">
         <Card className="w-full max-w-md border-0 shadow-lg">
           <CardHeader>
@@ -35,7 +37,7 @@ export function ConfirmEmailPage() {
             <CardDescription>Completa l'attivazione del tuo account.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className={status === 'error' ? 'text-sm text-red-600' : 'text-sm text-[var(--foreground)]'}>{message}</div>
+            <div className="text-sm text-[var(--foreground)]">{message}</div>
             <Button asChild className="w-full">
               <Link to="/login">Vai al login</Link>
             </Button>
@@ -48,6 +50,8 @@ export function ConfirmEmailPage() {
 
 function readErrorMessage(error: unknown) {
   if (isAxiosError(error)) {
+    const message = error.response?.data?.message
+    if (typeof message === 'string') return message
     const detail = error.response?.data?.detail
     if (typeof detail === 'string') return detail
     return error.message || 'Non sono riuscito a confermare la tua email.'

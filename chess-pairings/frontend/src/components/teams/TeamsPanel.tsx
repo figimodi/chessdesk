@@ -23,9 +23,7 @@ type Props = {
   onToggleTeamLineup: (teamId: number, playerId: number, roundNumber: number, isSelected: boolean) => void;
 };
 
-type DragPayload =
-  | { kind: "unassigned"; playerId: number }
-  | { kind: "team-member"; playerId: number; fromTeamId: number };
+type DragPayload = { kind: "unassigned"; playerId: number } | { kind: "team-member"; playerId: number; fromTeamId: number };
 
 export function TeamsPanel({
   canManage,
@@ -57,7 +55,7 @@ export function TeamsPanel({
   const totalPages = Math.max(1, Math.ceil(unassignedPlayers.length / pageSize));
   const safePage = Math.min(unassignedPage, totalPages);
   const paginatedUnassignedPlayers = unassignedPlayers.slice((safePage - 1) * pageSize, safePage * pageSize);
-  const selectedTeam = selectedTeamId == null ? null : teams.find((team) => team.id === selectedTeamId) ?? null;
+  const selectedTeam = selectedTeamId == null ? null : (teams.find((team) => team.id === selectedTeamId) ?? null);
 
   useEffect(() => {
     setUnassignedPage((current) => Math.min(current, totalPages));
@@ -99,7 +97,9 @@ export function TeamsPanel({
                 Crea squadra
               </Button>
             </>
-          ) : <div className="text-sm text-[var(--muted-foreground)]">Solo i proprietari del torneo possono modificare le squadre.</div>}
+          ) : (
+            <div className="text-sm text-[var(--muted-foreground)]">Solo i proprietari del torneo possono modificare le squadre.</div>
+          )}
         </CardContent>
       </Card>
 
@@ -126,7 +126,11 @@ export function TeamsPanel({
               dragPayload={dragPayload}
             />
           ))}
-          {!sortedTeams.length ? <Card><CardContent className="py-6 text-sm text-[var(--muted-foreground)]">Nessuna squadra creata.</CardContent></Card> : null}
+          {!sortedTeams.length ? (
+            <Card>
+              <CardContent className="py-6 text-sm text-[var(--muted-foreground)]">Nessuna squadra creata.</CardContent>
+            </Card>
+          ) : null}
         </div>
 
         <Card
@@ -160,10 +164,26 @@ export function TeamsPanel({
             {!unassignedPlayers.length ? <div className="text-sm text-[var(--muted-foreground)]">Tutti i giocatori sono assegnati.</div> : null}
             {unassignedPlayers.length > pageSize ? (
               <div className="flex items-center justify-between gap-3 pt-2 text-sm">
-                <div className="text-[var(--muted-foreground)]">Pagina {safePage} di {totalPages}</div>
+                <div className="text-[var(--muted-foreground)]">
+                  Pagina {safePage} di {totalPages}
+                </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" disabled={safePage <= 1} onClick={() => setUnassignedPage((current) => Math.max(1, current - 1))}>Prec.</Button>
-                  <Button variant="outline" size="sm" disabled={safePage >= totalPages} onClick={() => setUnassignedPage((current) => Math.min(totalPages, current + 1))}>Succ.</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={safePage <= 1}
+                    onClick={() => setUnassignedPage((current) => Math.max(1, current - 1))}
+                  >
+                    Prec.
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setUnassignedPage((current) => Math.min(totalPages, current + 1))}
+                  >
+                    Succ.
+                  </Button>
                 </div>
               </div>
             ) : null}
@@ -237,10 +257,10 @@ function TeamRosterCard({
               onDragStart={() => setDragPayload({ kind: "team-member", playerId: member.player_id, fromTeamId: team.id })}
               onDragEnd={() => setDragPayload(null)}
             />
-             <Button
-               variant="outline"
-               size="sm"
-               disabled={!canManage || index === 0}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canManage || index === 0}
               onClick={() => {
                 if (index === 0) return;
                 const next = [...team.members.map((item) => item.player_id)];
@@ -250,10 +270,10 @@ function TeamRosterCard({
             >
               <ArrowUp className="h-4 w-4" />
             </Button>
-             <Button
-               variant="outline"
-               size="sm"
-               disabled={!canManage || index === team.members.length - 1}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!canManage || index === team.members.length - 1}
               onClick={() => {
                 if (index === team.members.length - 1) return;
                 const next = [...team.members.map((item) => item.player_id)];
@@ -263,10 +283,16 @@ function TeamRosterCard({
             >
               <ArrowDown className="h-4 w-4" />
             </Button>
-             {canManage ? <Button variant="destructive" size="sm" onClick={() => onRemoveMember(team.id, member.player_id)}>Rimuovi</Button> : null}
+            {canManage ? (
+              <Button variant="destructive" size="sm" onClick={() => onRemoveMember(team.id, member.player_id)}>
+                Rimuovi
+              </Button>
+            ) : null}
           </div>
         ))}
-        {!team.members.length ? <div className="text-sm text-[var(--muted-foreground)]">Trascina qui i giocatori dalla colonna di destra.</div> : null}
+        {!team.members.length ? (
+          <div className="text-sm text-[var(--muted-foreground)]">Trascina qui i giocatori dalla colonna di destra.</div>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -293,24 +319,29 @@ function DraggablePlayerRow({
   onDragEnd: () => void;
   className?: string;
 }) {
-  const countryCode = getFederationFlagUrl(federation);
+  const flagUrl = getFederationFlagUrl(federation);
 
   return (
-     <div draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd} className={`rounded-xl border bg-white px-3 py-2 shadow-sm ${className}`}>
+    <div
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className={`rounded-xl border bg-white px-3 py-2 shadow-sm ${className}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{label}</div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted-foreground)]">
-            <span>N°{seedNumber ?? "-"}</span>
-            <span className="font-medium text-[var(--foreground)]">{rating ?? "-"}</span>
+            <span>{seedNumber ? `N° ${seedNumber}` : "-"}</span>
+            <span className="font-medium text-[var(--foreground)]">{rating ?? ""}</span>
           </div>
         </div>
         <div className="text-right text-xs">
           <div className="flex items-center justify-end gap-2 text-[var(--muted-foreground)]">
-            {countryCode ? <span className={`fi fi-${countryCode} fis rounded-sm`} /> : null}
-            <span>{federation ?? "-"}</span>
+            {flagUrl ? <img alt={federation ?? "Federation"} className="h-4 w-5 rounded-sm object-cover" src={flagUrl} /> : null}
+            <span>{federation ?? ""}</span>
           </div>
-          <div className="mt-1 text-[var(--muted-foreground)]">b.y. {birthYear ?? "-"}</div>
+          <div className="mt-1 text-[var(--muted-foreground)]">{birthYear ? `b.y. ${birthYear}` : ""}</div>
         </div>
       </div>
     </div>
@@ -354,7 +385,9 @@ function TeamDialog({
                 <Button variant="destructive" onClick={() => onToggleTeamStatus(team.id, false)} disabled={!team.is_active}>
                   Ritira squadra
                 </Button>
-                <Button variant="destructive" onClick={() => onDeleteTeam(team.id)}>Elimina squadra</Button>
+                <Button variant="destructive" onClick={() => onDeleteTeam(team.id)}>
+                  Elimina squadra
+                </Button>
               </div>
             ) : null}
           </div>
@@ -383,7 +416,9 @@ function TeamDialog({
 
           <div>
             <div className="mb-2 text-sm font-medium">Formazione per turno</div>
-            <div className="mb-3 text-xs text-[var(--muted-foreground)]">Seleziona i giocatori schierati per ogni turno. Obiettivo: {boardsPerMatch} giocatori per turno.</div>
+            <div className="mb-3 text-xs text-[var(--muted-foreground)]">
+              Seleziona i giocatori schierati per ogni turno. Obiettivo: {boardsPerMatch} giocatori per turno.
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full border-separate border-spacing-y-2 text-sm">
                 <thead>
@@ -391,7 +426,9 @@ function TeamDialog({
                     <th className="px-2">Sc.</th>
                     <th className="px-2">Giocatore</th>
                     {Array.from({ length: roundsCount }, (_, index) => (
-                      <th key={index} className="px-2 text-center">T{index + 1}</th>
+                      <th key={index} className="px-2 text-center">
+                        T{index + 1}
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -429,7 +466,9 @@ function TeamDialog({
           </div>
 
           <div className="flex justify-end">
-            <Button variant="outline" onClick={onClose}>Chiudi</Button>
+            <Button variant="outline" onClick={onClose}>
+              Chiudi
+            </Button>
           </div>
         </CardContent>
       </Card>

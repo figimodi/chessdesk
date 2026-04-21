@@ -213,5 +213,5 @@ export function getFederationFlagUrl(federation?: string | null) {
   if (!federation) return null;
   const countryCode = federationToCountry[federation.toUpperCase()];
   if (!countryCode) return null;
-  return countryCode;
+  return `https://flagcdn.com/24x18/${countryCode}.png`;
 }

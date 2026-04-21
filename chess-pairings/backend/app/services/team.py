@@ -1,3 +1,5 @@
+import secrets
+
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +28,8 @@ async def get_teams(db: AsyncSession, tournament_id: int) -> list[Team]:
 
 
 async def create_team(db: AsyncSession, tournament_id: int, data: TeamCreate) -> Team:
-    team = Team(tournament_id=tournament_id, **data.model_dump())
+    existing_teams = await get_teams(db, tournament_id)
+    team = Team(tournament_id=tournament_id, join_pin=_generate_join_pin(existing_teams), **data.model_dump())
     db.add(team)
     await db.commit()
     return await _reload_team(db, team.id)
@@ -239,3 +242,12 @@ async def _normalize_board_order(db: AsyncSession, team: Team) -> None:
 
 def _next_board_order(members: list[TournamentPlayer]) -> int:
     return max((member.team_board_order or 0 for member in members), default=0) + 1
+
+
+def _generate_join_pin(teams: list[Team]) -> str:
+    used_pins = {team.join_pin for team in teams}
+    for _ in range(1000):
+        candidate = f"{secrets.randbelow(10000):04d}"
+        if candidate not in used_pins:
+            return candidate
+    raise HTTPException(status_code=500, detail="Non sono riuscito a generare un PIN squadra")

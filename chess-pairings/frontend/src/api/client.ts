@@ -6,6 +6,9 @@ import type {
   MessageResponse,
   PasswordChangeRequest,
   Player,
+  PublicTeamRegistrationCreate,
+  PublicTeamRegistrationCreateResponse,
+  PublicTeamRegistrationJoin,
   PublicRegistrationRequest,
   Team,
   TournamentCreate,
@@ -218,6 +221,14 @@ export const api = {
   },
   async registerToTournament(tournamentId: string, payload: TournamentPublicRegistration) {
     const response = await customAxios.post<TournamentPlayer>(`/api/v1/tournaments/${tournamentId}/register`, payload)
+    return response.data
+  },
+  async createPublicTeamRegistration(tournamentId: string, payload: PublicTeamRegistrationCreate) {
+    const response = await customAxios.post<PublicTeamRegistrationCreateResponse>(`/api/v1/tournaments/${tournamentId}/team-registration/create`, payload)
+    return response.data
+  },
+  async joinPublicTeamRegistration(tournamentId: string, payload: PublicTeamRegistrationJoin) {
+    const response = await customAxios.post<TournamentPlayer>(`/api/v1/tournaments/${tournamentId}/team-registration/join`, payload)
     return response.data
   },
 }

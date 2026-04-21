@@ -14,6 +14,7 @@ from app.schemas.tournament import (
     TournamentPlayerStatusUpdate,
     TournamentUpdate,
 )
+from app.schemas.team import PublicTeamRegistrationCreate, PublicTeamRegistrationCreateResponse, PublicTeamRegistrationJoin
 from app.services import tournament as tournament_service
 
 router = APIRouter(tags=["tournaments"])
@@ -83,6 +84,37 @@ async def register_to_tournament(
     if tournament is None or not tournament_service.can_view_tournament(tournament, None):
         raise HTTPException(status_code=404, detail="Tournament not found")
     entry = await tournament_service.register_public_player(db, tournament, data)
+    return tournament_service.serialize_tournament_player(entry)
+
+
+@router.post(
+    "/api/v1/tournaments/{tournament_id}/team-registration/create",
+    response_model=PublicTeamRegistrationCreateResponse,
+)
+async def create_team_registration(
+    tournament_id: int,
+    data: PublicTeamRegistrationCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    tournament = await tournament_service._get_tournament_unscoped(db, tournament_id)
+    if tournament is None or not tournament_service.can_view_tournament(tournament, None):
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    return await tournament_service.register_public_team(db, tournament, data)
+
+
+@router.post(
+    "/api/v1/tournaments/{tournament_id}/team-registration/join",
+    response_model=TournamentPlayerRead,
+)
+async def join_team_registration(
+    tournament_id: int,
+    data: PublicTeamRegistrationJoin,
+    db: AsyncSession = Depends(get_db),
+):
+    tournament = await tournament_service._get_tournament_unscoped(db, tournament_id)
+    if tournament is None or not tournament_service.can_view_tournament(tournament, None):
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    entry = await tournament_service.join_public_team(db, tournament, data)
     return tournament_service.serialize_tournament_player(entry)
 
 

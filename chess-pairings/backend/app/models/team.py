@@ -6,11 +6,15 @@ from app.models.base import Base, TimestampMixin
 
 class Team(Base, TimestampMixin):
     __tablename__ = "team"
-    __table_args__ = (UniqueConstraint("tournament_id", "name", name="uq_team_name_per_tournament"),)
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "name", name="uq_team_name_per_tournament"),
+        UniqueConstraint("tournament_id", "join_pin", name="uq_team_join_pin_per_tournament"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    join_pin: Mapped[str] = mapped_column(String(4), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     tournament = relationship("Tournament", back_populates="teams")
