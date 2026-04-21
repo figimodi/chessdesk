@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.models.pairing import Pairing
 from app.models.round import Round
 from app.models.team import Team
+from app.models.user import UserRole
 from app.models.tournament import Tournament, TournamentPlayer, TournamentPlayerAvailability
 from app.models.user import User
 from app.schemas.team import TeamRead
@@ -24,6 +25,7 @@ from app.schemas.tournament import (
 )
 from app.services.files import FileStorageService
 from app.services import player as player_service
+from app.services import user as user_service
 from app.services.seeding import get_player_seed_numbers
 from app.services.standings import StandingsService
 from app.services.team_standings import TeamStandingsService
@@ -60,15 +62,25 @@ def _detail_options():
 
 
 def _apply_tournament_scope(statement, user: User):
-    if user.role.value == "admin":
-        return statement
+    if user.role == UserRole.admin:
+        return statement.where((Tournament.is_private.is_(False)) | (Tournament.owner_id == user.id))
     return statement.where(Tournament.owner_id == user.id)
+
+
+def can_view_tournament(tournament: Tournament, user: User | None) -> bool:
+    if not tournament.is_private:
+        return True
+    if user is None:
+        return False
+    return tournament.owner_id == user.id
 
 
 def can_manage_tournament(tournament: Tournament, user: User | None) -> bool:
     if user is None:
         return False
-    return user.role.value == "admin" or tournament.owner_id == user.id
+    if tournament.is_private:
+        return tournament.owner_id == user.id
+    return user.role == UserRole.admin or tournament.owner_id == user.id
 
 
 async def _get_tournament_unscoped(db: AsyncSession, tournament_id: int) -> Tournament | None:
@@ -134,7 +146,7 @@ async def create_tournament(db: AsyncSession, data: TournamentCreate, owner: Use
 
 
 async def update_tournament(
-    db: AsyncSession, tournament: Tournament, data: TournamentUpdate
+    db: AsyncSession, tournament: Tournament, data: TournamentUpdate, current_user: User
 ) -> Tournament:
     generated_rounds_count = sum(1 for round_model in tournament.rounds if round_model.pairings)
     if data.rounds_count is not None and data.rounds_count < generated_rounds_count:
@@ -144,6 +156,13 @@ async def update_tournament(
         )
 
     payload = data.model_dump(exclude_unset=True, exclude={"round_schedule", "tie_breaks"})
+    if "owner_id" in payload:
+        if current_user.role != UserRole.admin:
+            raise HTTPException(status_code=403, detail="Solo un admin puo riassegnare il proprietario del torneo.")
+        new_owner = await user_service.get_user_by_id(db, payload["owner_id"])
+        if new_owner is None:
+            raise HTTPException(status_code=404, detail="Utente proprietario non trovato")
+
     for key, value in payload.items():
         setattr(tournament, key, value)
 
@@ -486,11 +505,13 @@ def serialize_tournament_list_item(
         venue=tournament.venue,
         description=tournament.description,
         is_published=tournament.is_published,
+        is_private=tournament.is_private,
         is_registration_closed=tournament.is_registration_closed,
         bulletin_url=FileStorageService().public_url(tournament.bulletin_path),
         players_count=len(tournament.players),
         teams_count=len(tournament.teams),
         can_manage=can_manage_tournament(tournament, user),
+        owner_id=tournament.owner_id,
     )
 
 

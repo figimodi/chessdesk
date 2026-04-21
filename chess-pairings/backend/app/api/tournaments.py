@@ -24,7 +24,11 @@ async def get_tournaments(
     db: AsyncSession = Depends(get_db), current_user=Depends(get_optional_current_user)
 ):
     tournaments = await tournament_service._get_tournament_unscoped_list(db)
-    return [tournament_service.serialize_tournament_list_item(item, current_user) for item in tournaments]
+    return [
+        tournament_service.serialize_tournament_list_item(item, current_user)
+        for item in tournaments
+        if tournament_service.can_view_tournament(item, current_user)
+    ]
 
 
 @router.get("/api/v1/tournaments/{tournament_id}", response_model=TournamentDetail)
@@ -34,7 +38,7 @@ async def get_tournament(
     current_user=Depends(get_optional_current_user),
 ):
     tournament = await tournament_service._get_tournament_unscoped(db, tournament_id)
-    if tournament is None:
+    if tournament is None or not tournament_service.can_view_tournament(tournament, current_user):
         raise HTTPException(status_code=404, detail="Tournament not found")
     return await tournament_service.serialize_tournament_detail(db, tournament, current_user)
 
@@ -51,10 +55,11 @@ async def create_tournament(
 async def update_tournament(
     data: TournamentUpdate,
     tournament=Depends(get_tournament_or_404),
+    current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    updated = await tournament_service.update_tournament(db, tournament, data)
-    return tournament_service.serialize_tournament_list_item(updated, tournament.owner)
+    updated = await tournament_service.update_tournament(db, tournament, data, current_user)
+    return tournament_service.serialize_tournament_list_item(updated, current_user)
 
 
 @router.delete("/api/v1/admin/tournaments/{tournament_id}")
@@ -75,7 +80,7 @@ async def register_to_tournament(
     db: AsyncSession = Depends(get_db),
 ):
     tournament = await tournament_service._get_tournament_unscoped(db, tournament_id)
-    if tournament is None:
+    if tournament is None or not tournament_service.can_view_tournament(tournament, None):
         raise HTTPException(status_code=404, detail="Tournament not found")
     entry = await tournament_service.register_public_player(db, tournament, data)
     return tournament_service.serialize_tournament_player(entry)

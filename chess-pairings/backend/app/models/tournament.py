@@ -47,6 +47,7 @@ class Tournament(Base, TimestampMixin):
     description: Mapped[Optional[str]] = mapped_column(String(1000))
     bulletin_path: Mapped[Optional[str]] = mapped_column(String(255))
     is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_private: Mapped[bool] = mapped_column(Boolean, default=False)
     is_registration_closed: Mapped[bool] = mapped_column(Boolean, default=False)
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_account.id", ondelete="SET NULL"))
 

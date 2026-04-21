@@ -39,9 +39,9 @@ export function UsersPage() {
     <AppShell>
       <ConfirmDialog
         open={deleteDialogUser !== null}
-        title="Cancella account"
-        description={deleteDialogUser ? `Vuoi davvero cancellare l'account ${deleteDialogUser.email}? I suoi tornei verranno trasferiti al tuo account admin.` : ''}
-        confirmLabel="Cancella account"
+        title="Elimina account"
+        description={deleteDialogUser ? `Vuoi davvero eliminare l'account ${deleteDialogUser.email}? I suoi tornei verranno trasferiti al tuo account admin.` : ''}
+        confirmLabel="Elimina account"
         confirmVariant="destructive"
         onCancel={() => setDeleteDialogUser(null)}
         onConfirm={() => {
@@ -121,10 +121,8 @@ function UserRow({
   const [username, setUsername] = useState(user.username)
   const [password, setPassword] = useState('')
   const [isActive, setIsActive] = useState(user.is_active)
-  const [feedback, setFeedback] = useState<string | null>(null)
 
   async function handleSave() {
-    setFeedback(null)
     try {
       await updateUser({
         userId: user.id,
@@ -133,10 +131,7 @@ function UserRow({
         is_active: user.role === 'admin' ? undefined : isActive,
       })
       setPassword('')
-      setFeedback('Salvato')
-    } catch {
-      setFeedback('Errore nel salvataggio')
-    }
+    } catch {}
   }
 
   return (
@@ -162,24 +157,17 @@ function UserRow({
         </div>
         <div className="space-y-2 md:col-span-1">
           <Label>Stato</Label>
-          <Button
-            className="w-full"
-            disabled={user.role === 'admin'}
-            onClick={() => setIsActive((current) => !current)}
-            type="button"
-            variant={isActive ? 'secondary' : 'outline'}
-          >
-            {isActive ? 'Account attivo' : 'Account disattivato'}
-          </Button>
+            <Button className="w-full" disabled={user.role === 'admin'} onClick={() => setIsActive((current) => !current)} type="button" variant={isActive ? 'secondary' : 'outline'}>
+              {isActive ? 'Disattiva' : 'Attiva'}
+            </Button>
         </div>
       </div>
       <div className="mt-4 flex items-center justify-between gap-3">
-        <div className="text-sm text-[var(--muted-foreground)]">{feedback}</div>
         <div className="flex gap-2">
           {currentUserId !== user.id ? (
-            <Button onClick={() => onRequestDelete(user)} type="button" variant="destructive">Cancella</Button>
+            <Button onClick={() => onRequestDelete(user)} type="button" variant="destructive">Elimina</Button>
           ) : null}
-          <Button onClick={() => void handleSave()} type="button">Salva modifiche</Button>
+          <Button onClick={() => void handleSave()} type="button">Salva</Button>
         </div>
       </div>
     </div>

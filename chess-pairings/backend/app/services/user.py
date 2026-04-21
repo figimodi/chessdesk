@@ -21,6 +21,11 @@ async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
     return result.scalar_one_or_none()
 
 
+async def get_users_by_username(db: AsyncSession, username: str) -> list[User]:
+    result = await db.execute(select(User).where(User.username == username.strip()).order_by(User.id.asc()))
+    return list(result.scalars().all())
+
+
 async def list_users(db: AsyncSession) -> list[User]:
     result = await db.execute(select(User).order_by(User.role.desc(), User.username.asc(), User.email.asc()))
     return list(result.scalars().all())
@@ -34,6 +39,7 @@ async def create_user(
     password: str,
     role: UserRole = UserRole.user,
     is_active: bool = True,
+    email_confirmed: bool = True,
     must_change_password: bool = False,
 ) -> User:
     user = User(
@@ -42,6 +48,7 @@ async def create_user(
         password_hash=hash_password(password),
         role=role,
         is_active=is_active,
+        email_confirmed=email_confirmed,
         must_change_password=must_change_password,
     )
     db.add(user)
@@ -52,14 +59,27 @@ async def create_user(
 
 async def ensure_admin_user(db: AsyncSession, *, email: str, username: str, password: str) -> User:
     user = await get_user_by_email(db, email)
+    users_with_same_username = await get_users_by_username(db, username)
+
+    for conflicting_user in users_with_same_username:
+        if conflicting_user.email == email:
+            continue
+        conflicting_user.username = f"{username}-legacy-{conflicting_user.id}"
+
+    if users_with_same_username:
+        await db.commit()
+
     if user is None:
-        return await create_user(
+        user = next((item for item in users_with_same_username if item.email == email), None)
+    if user is None:
+        user = await create_user(
             db,
             email=email,
             username=username,
             password=password,
             role=UserRole.admin,
             is_active=True,
+            email_confirmed=True,
             must_change_password=False,
         )
 
@@ -67,7 +87,18 @@ async def ensure_admin_user(db: AsyncSession, *, email: str, username: str, pass
     user.password_hash = hash_password(password)
     user.role = UserRole.admin
     user.is_active = True
+    user.email_confirmed = True
     user.must_change_password = False
+    result = await db.execute(select(User).where(User.role == UserRole.admin, User.id != user.id))
+    other_admins = list(result.scalars().all())
+    await db.execute(
+        update(Tournament)
+        .where(Tournament.owner_id.in_([admin.id for admin in other_admins]))
+        .values(owner_id=user.id)
+    )
+    for other_admin in other_admins:
+        other_admin.role = UserRole.user
+
     await db.commit()
     await db.refresh(user)
     return user
@@ -79,6 +110,13 @@ async def authenticate_user(db: AsyncSession, username: str, password: str) -> U
         return None
     if not verify_password(password, user.password_hash):
         return None
+    return user
+
+
+async def confirm_user_email(db: AsyncSession, user: User) -> User:
+    user.email_confirmed = True
+    await db.commit()
+    await db.refresh(user)
     return user
 
 
@@ -127,5 +165,10 @@ async def delete_user(db: AsyncSession, user: User, *, reassigned_owner_id: int)
         .where(Tournament.owner_id == user.id)
         .values(owner_id=reassigned_owner_id)
     )
+    await db.execute(delete(User).where(User.id == user.id))
+    await db.commit()
+
+
+async def delete_user_without_reassignment(db: AsyncSession, user: User) -> None:
     await db.execute(delete(User).where(User.id == user.id))
     await db.commit()

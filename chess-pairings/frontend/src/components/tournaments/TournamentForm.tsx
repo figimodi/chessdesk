@@ -28,9 +28,11 @@ type Props = {
   onChange: (value: TournamentCreate) => void;
   minimumRoundsCount?: number;
   onRoundsCountValidityChange?: (isValid: boolean) => void;
+  ownerOptions?: Array<{ id: number; label: string }>;
+  showOwnerField?: boolean;
 };
 
-export function TournamentForm({ value, onChange, minimumRoundsCount = 1, onRoundsCountValidityChange }: Props) {
+export function TournamentForm({ value, onChange, minimumRoundsCount = 1, onRoundsCountValidityChange, ownerOptions = [], showOwnerField = false }: Props) {
   const rounds = useMemo(() => Array.from({ length: value.rounds_count }, (_, index) => index), [value.rounds_count]);
   const tieBreakOptions = value.type === "team" ? teamTieBreakOptions : individualTieBreakOptions;
   const [minutes, setMinutes] = useState(extractMinutes(value.time_control));
@@ -247,12 +249,30 @@ export function TournamentForm({ value, onChange, minimumRoundsCount = 1, onRoun
           </div>
         </>
       ) : null}
-      <Field label="Variazione Elo">
-        <label className="inline-flex items-center gap-2 text-sm font-medium">
-          <input type="checkbox" checked={value.is_elo_rated} onChange={(event) => onChange({ ...value, is_elo_rated: event.target.checked })} />
-          Calcola variazione Elo del torneo
-        </label>
-      </Field>
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <input type="checkbox" checked={value.is_elo_rated} onChange={(event) => onChange({ ...value, is_elo_rated: event.target.checked })} />
+        <span>Calcola variazione Elo del torneo</span>
+      </div>
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <input type="checkbox" checked={value.is_private} onChange={(event) => onChange({ ...value, is_private: event.target.checked })} />
+        <span>Mantieni il torneo privato</span>
+      </div>
+      {showOwnerField ? (
+        <Field label="Proprietario torneo">
+          <select
+            className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
+            value={value.owner_id ?? ""}
+            onChange={(event) => onChange({ ...value, owner_id: event.target.value === "" ? null : Number(event.target.value) })}
+          >
+            <option value="">Seleziona proprietario</option>
+            {ownerOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
       <div className="md:col-span-2 space-y-3">
         <Label>Criteri di spareggio</Label>
         <div className="space-y-2">

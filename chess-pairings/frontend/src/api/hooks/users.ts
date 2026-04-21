@@ -3,10 +3,11 @@ import { QueryCacheKeys } from '@/api/queryCacheKeys'
 import type { UserCreate, UserUpdate } from '@/api/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-export function useUsers() {
+export function useUsers(enabled = true) {
   return useQuery({
     queryKey: QueryCacheKeys.users,
     queryFn: api.listUsers,
+    enabled,
   })
 }
 

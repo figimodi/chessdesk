@@ -14,6 +14,7 @@ export function useTournament(tournamentId: string) {
   return useQuery({
     queryKey: QueryCacheKeys.tournament(tournamentId),
     queryFn: () => api.getTournament(tournamentId),
+    enabled: Boolean(tournamentId),
   });
 }
 

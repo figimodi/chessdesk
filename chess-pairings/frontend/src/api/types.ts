@@ -24,11 +24,13 @@ export type TournamentListItem = {
   venue?: string | null;
   description?: string | null;
   is_published: boolean;
+  is_private: boolean;
   is_registration_closed: boolean;
   bulletin_url?: string | null;
   players_count: number;
   teams_count: number;
   can_manage: boolean;
+  owner_id?: number | null;
 };
 
 export type TournamentPlayer = {
@@ -163,6 +165,8 @@ export type TournamentCreate = {
   venue?: string;
   description?: string;
   is_published: boolean;
+  is_private: boolean;
+  owner_id?: number | null;
   round_schedule: string[];
 };
 
@@ -199,6 +203,7 @@ export type User = {
   username: string
   role: UserRole
   is_active: boolean
+  email_confirmed: boolean
   must_change_password: boolean
 }
 
@@ -229,4 +234,22 @@ export type TournamentPublicRegistration = {
 export type PasswordChangeRequest = {
   current_password: string
   new_password: string
+}
+
+export type PublicRegistrationRequest = {
+  email: string
+  username: string
+  password: string
+}
+
+export type EmailConfirmationRequest = {
+  token: string
+}
+
+export type EmailConfirmationResendRequest = {
+  email: string
+}
+
+export type MessageResponse = {
+  message: string
 }

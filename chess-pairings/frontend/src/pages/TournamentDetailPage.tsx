@@ -44,7 +44,7 @@ export function TournamentDetailPage() {
   const { isAuthenticated, user } = useAuth();
   const { tournamentId = "" } = useParams();
   const navigate = useNavigate();
-  const { data: tournament } = useTournament(tournamentId);
+  const { data: tournament, isError } = useTournament(tournamentId);
   const assignMutation = useAssignPlayer(tournamentId);
   const removePlayerMutation = useRemovePlayer(tournamentId);
   const createTeamMutation = useCreateTeam(tournamentId);
@@ -214,6 +214,10 @@ export function TournamentDetailPage() {
     }
   }, [canConcludeTournament]);
 
+  if (isError) {
+    return <AppShell>Torneo non trovato o non accessibile.</AppShell>;
+  }
+
   if (!tournament) {
     return <AppShell>Caricamento torneo...</AppShell>;
   }
@@ -295,6 +299,7 @@ export function TournamentDetailPage() {
             <div className="flex flex-wrap items-center gap-3">
               <CardTitle className="text-3xl">{tournament.name}</CardTitle>
               <Badge>{tournament.type === "team" ? "Squadre" : "Individuale"}</Badge>
+              {tournament.is_private ? <Badge>Privato</Badge> : null}
             </div>
             <CardDescription>{tournament.description ?? "Nessuna descrizione disponibile."}</CardDescription>
           </CardHeader>
@@ -323,9 +328,9 @@ export function TournamentDetailPage() {
                 <InfoChip icon={<Hash className="h-4 w-4" />} label={`${tournament.rounds_count} turni`} />
               </div>
             </div>
-            {!tournament.is_registration_closed ? (
+            {!tournament.is_private && !tournament.is_registration_closed ? (
               <div className="flex flex-wrap gap-3">
-                <Button onClick={() => setIsRegistrationDialogOpen(true)} variant="secondary">Iscriviti al torneo</Button>
+                <Button onClick={() => setIsRegistrationDialogOpen(true)} variant="outline">Iscriviti al torneo</Button>
               </div>
             ) : null}
             {canManage ? (

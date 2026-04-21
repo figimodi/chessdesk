@@ -1,6 +1,8 @@
+import { isAxiosError } from 'axios'
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
+import { AppShell } from '@/components/layout/AppShell'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -34,37 +36,47 @@ export function LoginPage() {
       }
       const redirectPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/'
       navigate(redirectPath, { replace: true })
-    } catch {
-      setError('Username o password non validi.')
+    } catch (submissionError) {
+      setError(readErrorMessage(submissionError))
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--muted)] px-6 py-10">
-      <Card className="w-full max-w-md border-0 shadow-lg">
-        <CardHeader>
-          <CardTitle>Accedi a Chessdesk</CardTitle>
-          <CardDescription>Inserisci le credenziali del tuo account per gestire i tornei.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-5" onSubmit={handleSubmit}>
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input id="username" value={username} onChange={(event) => setUsername(event.target.value)} required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-            </div>
-            {error ? <div className="text-sm text-red-600">{error}</div> : null}
-            <Button className="w-full" disabled={isSubmitting} type="submit">
-              {isSubmitting ? 'Accesso in corso...' : 'Accedi'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+    <AppShell>
+      <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center px-6 py-10">
+        <Card className="w-full max-w-md border-0 shadow-lg">
+          <CardHeader>
+            <CardTitle>Accedi a Chessdesk</CardTitle>
+            <CardDescription>Inserisci le credenziali del tuo account per gestire i tornei.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-5" onSubmit={handleSubmit}>
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input id="username" value={username} onChange={(event) => setUsername(event.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+              </div>
+              {error ? <div className="text-sm text-red-600">{error}</div> : null}
+              <Button className="w-full" disabled={isSubmitting} type="submit">
+                {isSubmitting ? 'Accesso in corso...' : 'Accedi'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </AppShell>
   )
+}
+
+function readErrorMessage(error: unknown) {
+  if (isAxiosError(error)) {
+    const detail = error.response?.data?.detail
+    if (typeof detail === 'string') return detail
+  }
+  return 'Username o password non validi.'
 }

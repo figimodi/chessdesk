@@ -76,7 +76,10 @@ export function TournamentsPage() {
                     <div>
                       <CardTitle>{tournament.name}</CardTitle>
                     </div>
-                    <Badge>{tournament.type === "team" ? "Squadre" : "Individuale"}</Badge>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge>{tournament.type === "team" ? "Squadre" : "Individuale"}</Badge>
+                      {tournament.is_private ? <Badge>Privato</Badge> : null}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -94,14 +97,14 @@ export function TournamentsPage() {
                       {tournament.bulletin_url ? (
                         <InfoChip icon={<Paperclip className="h-4 w-4" />} label="Bando" href={tournament.bulletin_url} />
                       ) : null}
-                      {!tournament.is_registration_closed ? (
+                      {!tournament.is_private && !tournament.is_registration_closed ? (
                         <Button
                           onClick={(event) => {
                             event.stopPropagation();
                             setRegistrationTournamentId(tournament.id);
                           }}
                           size="sm"
-                          variant="secondary"
+                          variant="outline"
                         >
                           Iscriviti
                         </Button>

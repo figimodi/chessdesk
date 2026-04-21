@@ -9,10 +9,7 @@ from fastapi.routing import APIRoute
 from app import models  # noqa: F401
 from app.api import auth, health, pairings, players, teams, tournaments, users
 from app.core.config import settings
-from app.core.database import AsyncSessionLocal, engine
-from app.models.base import Base
-from app.models.tournament import Tournament
-from sqlalchemy import text
+from app.core.migrations import run_migrations
 from app.services import user as user_service
 
 
@@ -20,113 +17,27 @@ def generate_operation_id(route: APIRoute) -> str:
     return route.name
 
 
+async def bootstrap_admin_user() -> None:
+    if not (settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD and settings.ADMIN_USERNAME):
+        return
+
+    from app.core.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        await user_service.ensure_admin_user(
+            session,
+            email=settings.ADMIN_EMAIL,
+            username=settings.ADMIN_USERNAME,
+            password=settings.ADMIN_PASSWORD,
+        )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Path(settings.DOCUMENTS_DIR).mkdir(parents=True, exist_ok=True)
     Path(settings.PAIRINGS_WORK_DIR).mkdir(parents=True, exist_ok=True)
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-        await connection.execute(
-            text("ALTER TABLE player ADD COLUMN IF NOT EXISTS rapid_rating INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE player ADD COLUMN IF NOT EXISTS standard_k INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE player ADD COLUMN IF NOT EXISTS rapid_k INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE player ADD COLUMN IF NOT EXISTS blitz_rating INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE player ADD COLUMN IF NOT EXISTS blitz_k INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE player ADD COLUMN IF NOT EXISTS birth_year INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE catalog_player ADD COLUMN IF NOT EXISTS birth_year INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE catalog_player ADD COLUMN IF NOT EXISTS standard_k INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE catalog_player ADD COLUMN IF NOT EXISTS rapid_k INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE catalog_player ADD COLUMN IF NOT EXISTS blitz_k INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE tournament ADD COLUMN IF NOT EXISTS is_registration_closed BOOLEAN DEFAULT FALSE")
-        )
-        await connection.execute(
-            text("ALTER TABLE tournament ADD COLUMN IF NOT EXISTS tie_breaks VARCHAR(120) DEFAULT 'buchholz,sonneborn_berger,rating'")
-        )
-        await connection.execute(
-            text("ALTER TABLE tournament ADD COLUMN IF NOT EXISTS is_elo_rated BOOLEAN DEFAULT FALSE")
-        )
-        await connection.execute(
-            text("ALTER TABLE tournament ADD COLUMN IF NOT EXISTS max_players_per_team INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE tournament ADD COLUMN IF NOT EXISTS boards_per_match INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE tournament ADD COLUMN IF NOT EXISTS enforce_board_order BOOLEAN DEFAULT FALSE")
-        )
-        await connection.execute(
-            text("ALTER TABLE tournament ADD COLUMN IF NOT EXISTS match_points_win INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE tournament ADD COLUMN IF NOT EXISTS match_points_draw INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE tournament ADD COLUMN IF NOT EXISTS match_points_loss INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE tournament_player ADD COLUMN IF NOT EXISTS start_round_number INTEGER DEFAULT 1")
-        )
-        await connection.execute(
-            text("ALTER TABLE tournament_player ADD COLUMN IF NOT EXISTS team_board_order INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE pairing ADD COLUMN IF NOT EXISTS match_number INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TYPE pairingresult ADD VALUE IF NOT EXISTS 'white_forfeit_win'")
-        )
-        await connection.execute(
-            text("ALTER TYPE pairingresult ADD VALUE IF NOT EXISTS 'black_forfeit_win'")
-        )
-        await connection.execute(
-            text("ALTER TYPE pairingresult ADD VALUE IF NOT EXISTS 'double_forfeit_loss'")
-        )
-        await connection.execute(
-            text("ALTER TYPE pairingresult ADD VALUE IF NOT EXISTS 'double_forfeit_win'")
-        )
-        await connection.execute(
-            text("ALTER TABLE team ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE")
-        )
-        await connection.execute(
-            text("ALTER TABLE tournament ADD COLUMN IF NOT EXISTS owner_id INTEGER")
-        )
-        await connection.execute(
-            text("ALTER TABLE user_account ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE")
-        )
-
-    if settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD and settings.ADMIN_USERNAME:
-        async with AsyncSessionLocal() as session:
-            admin_user = await user_service.ensure_admin_user(
-                session,
-                email=settings.ADMIN_EMAIL,
-                username=settings.ADMIN_USERNAME,
-                password=settings.ADMIN_PASSWORD,
-            )
-            await session.execute(
-                text("UPDATE tournament SET owner_id = :owner_id WHERE owner_id IS NULL"),
-                {"owner_id": admin_user.id},
-            )
-            await session.commit()
+    await run_migrations()
+    await bootstrap_admin_user()
 
     yield
 
@@ -148,10 +59,10 @@ app.add_middleware(
 )
 
 
-
 @app.get("/files/documents/{file_name}")
 async def get_document(file_name: str):
     return FileResponse(Path(settings.DOCUMENTS_DIR) / file_name)
+
 
 app.include_router(health.router)
 app.include_router(auth.router)

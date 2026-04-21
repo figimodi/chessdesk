@@ -1,7 +1,10 @@
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from '@/auth/AuthContext'
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage'
+import { ConfirmEmailPage } from '@/pages/ConfirmEmailPage'
 import { LoginPage } from '@/pages/LoginPage'
+import { ProfilePage } from '@/pages/ProfilePage'
+import { RegisterPage } from '@/pages/RegisterPage'
 import { TournamentDetailPage } from "@/pages/TournamentDetailPage";
 import { TournamentFormPage } from "@/pages/TournamentFormPage";
 import { TournamentsPage } from "@/pages/TournamentsPage";
@@ -15,8 +18,11 @@ export const Router = () => (
       <Route path="/tournaments" element={<TournamentsPage />} />
       <Route path="/tournaments/:tournamentId" element={<TournamentDetailPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/confirm-email" element={<ConfirmEmailPage />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/change-password" element={<ChangePasswordPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/tournaments/new" element={<TournamentFormPage mode="create" />} />
         <Route path="/tournaments/:tournamentId/edit" element={<TournamentFormPage mode="edit" />} />
         <Route element={<AdminRoute />}>

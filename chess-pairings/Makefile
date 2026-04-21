@@ -1,4 +1,4 @@
-.PHONY: help compose down logs ps restart rebuild build-players-db update-swagger
+.PHONY: help compose down logs ps restart rebuild build-players-db update-swagger migrate
 
 # Colors
 GREEN  := \033[0;32m
@@ -48,6 +48,7 @@ help:
 	@echo "  $(GREEN)logs$(NC)            Follow live log output from all running containers"
 	@echo "  $(GREEN)ps$(NC)              List containers and their current status"
 	@echo "  $(GREEN)build-players-db$(NC) Rebuild catalog_player table from backend/data/players_list_foa.txt"
+	@echo "  $(GREEN)migrate$(NC)         Run Alembic migrations on the backend container"
 	@echo "  $(GREEN)update-swagger$(NC)  Fetch backend OpenAPI into frontend/src/api/swagger.yaml"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
@@ -98,6 +99,11 @@ build-players-db:
 	$(call check_env)
 	@echo "$(GREEN)Rebuilding catalog_player table from TXT file...$(NC)"
 	$(COMPOSE_CMD) run --rm app python -m app.scripts.build_players_db
+
+migrate:
+	$(call check_env)
+	@echo "$(GREEN)Running Alembic migrations...$(NC)"
+	$(COMPOSE_CMD) run --rm app python -m app.scripts.migrate
 
 update-swagger:
 	curl http://localhost:8010/openapi.json -o frontend/src/api/swagger.yaml

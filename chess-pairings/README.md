@@ -184,6 +184,15 @@ Variabili ambiente rilevanti:
 
 Il primo admin viene bootstrapato automaticamente all'avvio del backend solo se `ADMIN_EMAIL`, `ADMIN_PASSWORD` e `ADMIN_USERNAME` sono valorizzati.
 
+### Migrazioni database
+
+Il progetto usa Alembic per gestire lo schema del database.
+
+Comandi utili:
+
+- `make migrate` esegue `alembic upgrade head` nel container backend
+- all'avvio del backend viene eseguito automaticamente `upgrade head`
+
 Il login applicativo usa lo `username`, non l'email. La login form principale e' nella homepage.
 
 ### Pattern applicato
@@ -194,6 +203,7 @@ Come in `kasparov-webapp`, il backend usa:
 - `services/` per operazioni DB e logica di dominio
 - `core/database.py` per engine async e dependency injection della sessione
 - `core/config.py` per variabili ambiente
+- `alembic/` per migrazioni DB versionate
 
 ### Moduli principali
 

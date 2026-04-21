@@ -6,6 +6,7 @@ package-mode = false
 authors = [{ name = "Filippo Greco" }]
 requires-python = ">=3.12"
 dependencies = [
+    "alembic (>=1.16.5,<2.0.0)",
     "fastapi (>=0.115.12,<0.116.0)",
     "uvicorn[standard] (>=0.34.0,<0.35.0)",
     "sqlalchemy (>=2.0.39,<3.0.0)",

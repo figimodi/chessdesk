@@ -34,6 +34,7 @@ async def create_user(
         username=data.username,
         password=data.password,
         role=UserRole.user,
+        email_confirmed=True,
         must_change_password=True,
     )
     return UserRead.model_validate(user)
@@ -43,7 +44,7 @@ async def create_user(
 async def update_user(
     user_id: int,
     data: UserUpdate,
-    _: object = Depends(get_admin_user),
+    current_admin=Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
     user = await user_service.get_user_by_id(db, user_id)

@@ -44,6 +44,7 @@ class TournamentBase(ORMModel):
     venue: str | None = Field(default=None, max_length=120)
     description: str | None = Field(default=None, max_length=1000)
     is_published: bool = False
+    is_private: bool = False
     is_registration_closed: bool = False
 
     @field_validator("end_date")
@@ -141,7 +142,9 @@ class TournamentUpdate(ORMModel):
     venue: str | None = None
     description: str | None = None
     is_published: bool | None = None
+    is_private: bool | None = None
     is_registration_closed: bool | None = None
+    owner_id: int | None = None
     round_schedule: list[datetime] | None = None
 
     @model_validator(mode="after")
@@ -165,6 +168,7 @@ class TournamentListItem(TournamentBase):
     players_count: int = 0
     teams_count: int = 0
     can_manage: bool = False
+    owner_id: int | None = None
 
 
 class TournamentPlayerAssign(ORMModel):

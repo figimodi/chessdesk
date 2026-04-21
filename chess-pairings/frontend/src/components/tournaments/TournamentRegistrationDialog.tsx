@@ -111,7 +111,7 @@ export function TournamentRegistrationDialog({ onClose, tournament }: Props) {
                     <TableBody>
                       {paginatedResults.map((player) => (
                         <TableRow
-                          className={selectedFideId === player.fide_id ? 'cursor-pointer bg-[var(--muted)]' : 'cursor-pointer'}
+                          className={selectedFideId === player.fide_id ? 'cursor-pointer bg-slate-200/80' : 'cursor-pointer'}
                           key={player.fide_id}
                           onClick={() => setSelectedFideId(player.fide_id)}
                         >

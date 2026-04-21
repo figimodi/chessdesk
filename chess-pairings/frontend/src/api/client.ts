@@ -1,8 +1,12 @@
 import type {
   AuthToken,
+  EmailConfirmationRequest,
+  EmailConfirmationResendRequest,
   FidePlayer,
+  MessageResponse,
   PasswordChangeRequest,
   Player,
+  PublicRegistrationRequest,
   Team,
   TournamentCreate,
   TournamentDetail,
@@ -19,6 +23,18 @@ import { customAxios } from '@/api/customClient'
 export const api = {
   async login(payload: { username: string; password: string }) {
     const response = await customAxios.post<AuthToken>('/api/v1/auth/login', payload)
+    return response.data
+  },
+  async register(payload: PublicRegistrationRequest) {
+    const response = await customAxios.post<MessageResponse>('/api/v1/auth/register', payload)
+    return response.data
+  },
+  async confirmEmail(payload: EmailConfirmationRequest) {
+    const response = await customAxios.post<MessageResponse>('/api/v1/auth/confirm-email', payload)
+    return response.data
+  },
+  async resendConfirmation(payload: EmailConfirmationResendRequest) {
+    const response = await customAxios.post<MessageResponse>('/api/v1/auth/resend-confirmation', payload)
     return response.data
   },
   async getMe() {

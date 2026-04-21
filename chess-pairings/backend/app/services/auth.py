@@ -52,6 +52,51 @@ def create_access_token(user_id: int) -> str:
     return f"{_b64encode(serialized_payload)}.{_b64encode(signature)}"
 
 
+def create_email_confirmation_token(user_id: int, email: str) -> str:
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.EMAIL_CONFIRMATION_TOKEN_TTL_HOURS)
+    payload = {
+        "sub": str(user_id),
+        "email": email,
+        "purpose": "email_confirmation",
+        "exp": int(expires_at.timestamp()),
+    }
+    serialized_payload = json.dumps(payload, separators=(",", ":")).encode()
+    signature = hmac.new(
+        settings.AUTH_SECRET_KEY.encode("utf-8"),
+        serialized_payload,
+        hashlib.sha256,
+    ).digest()
+    return f"{_b64encode(serialized_payload)}.{_b64encode(signature)}"
+
+
+def decode_email_confirmation_token(token: str) -> tuple[int, str]:
+    try:
+        payload_part, signature_part = token.split(".", maxsplit=1)
+        payload_bytes = _b64decode(payload_part)
+        provided_signature = _b64decode(signature_part)
+    except (ValueError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="Invalid confirmation token")
+
+    expected_signature = hmac.new(
+        settings.AUTH_SECRET_KEY.encode("utf-8"),
+        payload_bytes,
+        hashlib.sha256,
+    ).digest()
+    if not hmac.compare_digest(provided_signature, expected_signature):
+        raise HTTPException(status_code=400, detail="Invalid confirmation token")
+
+    payload = json.loads(payload_bytes.decode())
+    if payload.get("purpose") != "email_confirmation":
+        raise HTTPException(status_code=400, detail="Invalid confirmation token")
+    if payload.get("exp", 0) < int(datetime.now(timezone.utc).timestamp()):
+        raise HTTPException(status_code=400, detail="Confirmation token expired")
+
+    try:
+        return int(payload["sub"]), str(payload["email"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid confirmation token")
+
+
 def decode_access_token(token: str) -> int:
     try:
         payload_part, signature_part = token.split(".", maxsplit=1)

@@ -1,11 +1,14 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import type { PropsWithChildren } from 'react'
-import { LogOut, Shield, Trophy } from 'lucide-react'
+import { CircleUserRound, Trophy } from 'lucide-react'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/ui/button'
 
 export function AppShell({ children }: PropsWithChildren) {
-  const { logout, user } = useAuth()
+  const { user } = useAuth()
+  const location = useLocation()
+  const showLoginButton = !user && location.pathname !== '/login'
+  const showRegisterButton = !user && location.pathname !== '/register'
 
   return (
     <div className="min-h-screen">
@@ -25,21 +28,20 @@ export function AppShell({ children }: PropsWithChildren) {
               </div>
             ) : null}
             {user ? (
-              <Button onClick={logout} size="sm" type="button" variant="outline">
-                <LogOut className="h-4 w-4" />
-                Esci
+              <Button asChild size="sm" type="button" variant="outline">
+                <Link to="/profile" aria-label="Profilo">
+                  <CircleUserRound className="h-4 w-4" />
+                  Profilo
+                </Link>
               </Button>
-            ) : (
+            ) : showLoginButton ? (
               <Button asChild size="sm" type="button" variant="outline">
                 <Link to="/login">Login</Link>
               </Button>
-            )}
-            {user?.role === 'admin' ? (
-              <Button asChild size="sm" variant="secondary">
-                <Link to="/users">
-                  <Shield className="h-4 w-4" />
-                  Utenti
-                </Link>
+            ) : null}
+            {showRegisterButton ? (
+              <Button asChild size="sm" type="button">
+                <Link to="/register">Registrati</Link>
               </Button>
             ) : null}
           </div>

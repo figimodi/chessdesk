@@ -22,9 +22,18 @@ class Settings(BaseSettings):
     PLAYER_LIST_FILE: str = str(BACKEND_ROOT / "data" / "players_list_foa.txt")
     AUTH_SECRET_KEY: str = "change-me"
     AUTH_TOKEN_TTL_HOURS: int = 12
+    EMAIL_CONFIRMATION_TOKEN_TTL_HOURS: int = 24
     ADMIN_EMAIL: str | None = None
     ADMIN_PASSWORD: str | None = None
     ADMIN_USERNAME: str | None = None
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_FROM_EMAIL: str | None = None
+    SMTP_FROM_NAME: str = "Chess Pairings"
+    SMTP_USE_TLS: bool = True
 
 
 settings = Settings()
