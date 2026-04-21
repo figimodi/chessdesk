@@ -7,11 +7,13 @@ from fastapi.responses import FileResponse
 from fastapi.routing import APIRoute
 
 from app import models  # noqa: F401
-from app.api import health, pairings, players, teams, tournaments
+from app.api import auth, health, pairings, players, teams, tournaments, users
 from app.core.config import settings
-from app.core.database import engine
+from app.core.database import AsyncSessionLocal, engine
 from app.models.base import Base
+from app.models.tournament import Tournament
 from sqlalchemy import text
+from app.services import user as user_service
 
 
 def generate_operation_id(route: APIRoute) -> str:
@@ -105,6 +107,27 @@ async def lifespan(_: FastAPI):
         await connection.execute(
             text("ALTER TABLE team ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE")
         )
+        await connection.execute(
+            text("ALTER TABLE tournament ADD COLUMN IF NOT EXISTS owner_id INTEGER")
+        )
+        await connection.execute(
+            text("ALTER TABLE user_account ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT FALSE")
+        )
+
+    if settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD and settings.ADMIN_USERNAME:
+        async with AsyncSessionLocal() as session:
+            admin_user = await user_service.ensure_admin_user(
+                session,
+                email=settings.ADMIN_EMAIL,
+                username=settings.ADMIN_USERNAME,
+                password=settings.ADMIN_PASSWORD,
+            )
+            await session.execute(
+                text("UPDATE tournament SET owner_id = :owner_id WHERE owner_id IS NULL"),
+                {"owner_id": admin_user.id},
+            )
+            await session.commit()
+
     yield
 
 
@@ -131,6 +154,8 @@ async def get_document(file_name: str):
     return FileResponse(Path(settings.DOCUMENTS_DIR) / file_name)
 
 app.include_router(health.router)
+app.include_router(auth.router)
+app.include_router(users.router)
 app.include_router(tournaments.router)
 app.include_router(players.router)
 app.include_router(teams.router)

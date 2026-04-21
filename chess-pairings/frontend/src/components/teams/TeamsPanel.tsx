@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { getFederationFlagUrl } from "@/lib/federationFlags";
 
 type Props = {
+  canManage: boolean;
   teams: Team[];
   players: TournamentPlayer[];
   roundsCount: number;
@@ -27,6 +28,7 @@ type DragPayload =
   | { kind: "team-member"; playerId: number; fromTeamId: number };
 
 export function TeamsPanel({
+  canManage,
   teams,
   players,
   roundsCount,
@@ -65,6 +67,7 @@ export function TeamsPanel({
     <div className="space-y-4">
       {selectedTeam ? (
         <TeamDialog
+          canManage={canManage}
           key={selectedTeam.id}
           team={selectedTeam}
           roundsCount={roundsCount}
@@ -82,17 +85,21 @@ export function TeamsPanel({
           <CardTitle>Nuova squadra</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          <Input className="max-w-sm" placeholder="Nome squadra" value={teamName} onChange={(event) => setTeamName(event.target.value)} />
-          <Button
-            onClick={() => {
-              const trimmed = teamName.trim();
-              if (!trimmed) return;
-              onCreateTeam(trimmed);
-              setTeamName("");
-            }}
-          >
-            Crea squadra
-          </Button>
+          {canManage ? (
+            <>
+              <Input className="max-w-sm" placeholder="Nome squadra" value={teamName} onChange={(event) => setTeamName(event.target.value)} />
+              <Button
+                onClick={() => {
+                  const trimmed = teamName.trim();
+                  if (!trimmed) return;
+                  onCreateTeam(trimmed);
+                  setTeamName("");
+                }}
+              >
+                Crea squadra
+              </Button>
+            </>
+          ) : <div className="text-sm text-[var(--muted-foreground)]">Solo i proprietari del torneo possono modificare le squadre.</div>}
         </CardContent>
       </Card>
 
@@ -104,6 +111,7 @@ export function TeamsPanel({
               team={team}
               category={category}
               onOpen={() => setSelectedTeamId(team.id)}
+              canManage={canManage}
               onDropPlayer={(payload) => {
                 if (payload.kind === "team-member" && payload.fromTeamId === team.id) return;
                 if (payload.kind === "team-member" && payload.fromTeamId !== team.id) {
@@ -123,9 +131,11 @@ export function TeamsPanel({
 
         <Card
           className="xl:sticky xl:top-4 self-start"
-          onDragOver={(event) => event.preventDefault()}
+          onDragOver={(event) => {
+            if (canManage) event.preventDefault();
+          }}
           onDrop={() => {
-            if (!dragPayload || dragPayload.kind !== "team-member") return;
+            if (!canManage || !dragPayload || dragPayload.kind !== "team-member") return;
             onRemoveMember(dragPayload.fromTeamId, dragPayload.playerId);
             setDragPayload(null);
           }}
@@ -142,6 +152,7 @@ export function TeamsPanel({
                 federation={player.federation}
                 rating={getPlayerRating(player, category)}
                 birthYear={player.birth_year}
+                draggable={canManage}
                 onDragStart={() => setDragPayload({ kind: "unassigned", playerId: player.player_id })}
                 onDragEnd={() => setDragPayload(null)}
               />
@@ -164,6 +175,7 @@ export function TeamsPanel({
 }
 
 function TeamRosterCard({
+  canManage,
   team,
   category,
   onOpen,
@@ -173,6 +185,7 @@ function TeamRosterCard({
   setDragPayload,
   dragPayload,
 }: {
+  canManage: boolean;
   team: Team;
   category: string;
   onOpen: () => void;
@@ -187,11 +200,13 @@ function TeamRosterCard({
 
   return (
     <Card
-      className="cursor-pointer"
+      className={canManage ? "cursor-pointer" : "cursor-default"}
       onClick={onOpen}
-      onDragOver={(event) => event.preventDefault()}
+      onDragOver={(event) => {
+        if (canManage) event.preventDefault();
+      }}
       onDrop={() => {
-        if (!dragPayload) return;
+        if (!canManage || !dragPayload) return;
         onDropPlayer(dragPayload);
         setDragPayload(null);
       }}
@@ -218,13 +233,14 @@ function TeamRosterCard({
               federation={member.federation}
               rating={getTeamMemberRating(member, category)}
               birthYear={member.birth_year}
+              draggable={canManage}
               onDragStart={() => setDragPayload({ kind: "team-member", playerId: member.player_id, fromTeamId: team.id })}
               onDragEnd={() => setDragPayload(null)}
             />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={index === 0}
+             <Button
+               variant="outline"
+               size="sm"
+               disabled={!canManage || index === 0}
               onClick={() => {
                 if (index === 0) return;
                 const next = [...team.members.map((item) => item.player_id)];
@@ -234,10 +250,10 @@ function TeamRosterCard({
             >
               <ArrowUp className="h-4 w-4" />
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={index === team.members.length - 1}
+             <Button
+               variant="outline"
+               size="sm"
+               disabled={!canManage || index === team.members.length - 1}
               onClick={() => {
                 if (index === team.members.length - 1) return;
                 const next = [...team.members.map((item) => item.player_id)];
@@ -247,7 +263,7 @@ function TeamRosterCard({
             >
               <ArrowDown className="h-4 w-4" />
             </Button>
-            <Button variant="destructive" size="sm" onClick={() => onRemoveMember(team.id, member.player_id)}>Rimuovi</Button>
+             {canManage ? <Button variant="destructive" size="sm" onClick={() => onRemoveMember(team.id, member.player_id)}>Rimuovi</Button> : null}
           </div>
         ))}
         {!team.members.length ? <div className="text-sm text-[var(--muted-foreground)]">Trascina qui i giocatori dalla colonna di destra.</div> : null}
@@ -262,6 +278,7 @@ function DraggablePlayerRow({
   federation,
   rating,
   birthYear,
+  draggable = true,
   onDragStart,
   onDragEnd,
   className = "",
@@ -271,6 +288,7 @@ function DraggablePlayerRow({
   federation?: string | null;
   rating?: number | null;
   birthYear?: number | null;
+  draggable?: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
   className?: string;
@@ -278,7 +296,7 @@ function DraggablePlayerRow({
   const countryCode = getFederationFlagUrl(federation);
 
   return (
-    <div draggable onDragStart={onDragStart} onDragEnd={onDragEnd} className={`rounded-xl border bg-white px-3 py-2 shadow-sm ${className}`}>
+     <div draggable={draggable} onDragStart={onDragStart} onDragEnd={onDragEnd} className={`rounded-xl border bg-white px-3 py-2 shadow-sm ${className}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{label}</div>
@@ -300,6 +318,7 @@ function DraggablePlayerRow({
 }
 
 function TeamDialog({
+  canManage,
   team,
   roundsCount,
   boardsPerMatch,
@@ -309,6 +328,7 @@ function TeamDialog({
   onToggleTeamStatus,
   onToggleTeamLineup,
 }: {
+  canManage: boolean;
   team: Team;
   roundsCount: number;
   boardsPerMatch: number;
@@ -329,12 +349,14 @@ function TeamDialog({
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
             <CardTitle>{team.name}</CardTitle>
-            <div className="flex gap-2">
-              <Button variant="destructive" onClick={() => onToggleTeamStatus(team.id, false)} disabled={!team.is_active}>
-                Ritira squadra
-              </Button>
-              <Button variant="destructive" onClick={() => onDeleteTeam(team.id)}>Elimina squadra</Button>
-            </div>
+            {canManage ? (
+              <div className="flex gap-2">
+                <Button variant="destructive" onClick={() => onToggleTeamStatus(team.id, false)} disabled={!team.is_active}>
+                  Ritira squadra
+                </Button>
+                <Button variant="destructive" onClick={() => onDeleteTeam(team.id)}>Elimina squadra</Button>
+              </div>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -350,6 +372,7 @@ function TeamDialog({
                     type="button"
                     className={`flex h-10 w-10 items-center justify-center rounded-md border font-semibold ${isAvailable ? "border-slate-300 bg-white text-slate-900 text-sm" : "border-red-300 bg-slate-100 text-red-600 text-xl leading-none"}`}
                     onClick={() => onToggleTeamAvailability(team.id, roundNumber, !isAvailable)}
+                    disabled={!canManage}
                   >
                     {isAvailable ? roundNumber : "×"}
                   </button>
@@ -391,7 +414,7 @@ function TeamDialog({
                                 if (autoSelectAllMembers) return;
                                 onToggleTeamLineup(team.id, member.player_id, roundNumber, !isSelected);
                               }}
-                              disabled={isDisabled && !isSelected}
+                              disabled={!canManage || (isDisabled && !isSelected)}
                             >
                               {isSelected ? "✓" : "-"}
                             </button>

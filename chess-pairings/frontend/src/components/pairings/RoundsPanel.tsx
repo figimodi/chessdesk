@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getFederationFlagUrl } from "@/lib/federationFlags";
 
 type Props = {
+  canManage: boolean;
   rounds: Round[];
   standings: StandingEntry[];
   players: TournamentPlayer[];
@@ -28,6 +29,7 @@ type Props = {
 const results: PairingResult[] = ["1-0", "0-1", "1/2-1/2", "1-0F", "0-1F", "0F-0F", "1F-1F"];
 
 export function RoundsPanel({
+  canManage,
   rounds,
   standings,
   players,
@@ -90,12 +92,14 @@ export function RoundsPanel({
           <CardTitle>Turni</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
-          <Button
-            onClick={showConcludeTournament ? onConcludeTournament : onGenerateRound}
-            disabled={isTournamentConcluded || !registrationClosed || (showConcludeTournament ? !canConcludeTournament : !canGenerateNextRound) || isGenerating}
-          >
-            {isGenerating ? roundActionPendingLabel : roundActionLabel}
-          </Button>
+          {canManage ? (
+            <Button
+              onClick={showConcludeTournament ? onConcludeTournament : onGenerateRound}
+              disabled={isTournamentConcluded || !registrationClosed || (showConcludeTournament ? !canConcludeTournament : !canGenerateNextRound) || isGenerating}
+            >
+              {isGenerating ? roundActionPendingLabel : roundActionLabel}
+            </Button>
+          ) : <div className="text-sm text-[var(--muted-foreground)]">Nessun turno ancora pubblicato.</div>}
         </CardContent>
       </Card>
     );
@@ -128,17 +132,19 @@ export function RoundsPanel({
               Succ.
             </Button>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={showConcludeTournament ? onConcludeTournament : onGenerateRound}
-              disabled={isTournamentConcluded || !registrationClosed || (showConcludeTournament ? !canConcludeTournament : !canGenerateNextRound) || isGenerating}
-            >
-              {isGenerating ? roundActionPendingLabel : roundActionLabel}
-            </Button>
-            <Button variant="destructive" onClick={onDeleteLatestRound} disabled={!isLatestRoundSelected || isDeleting}>
-              {isDeleting ? "Eliminazione..." : `Elimina turno ${latestRound.number}`}
-            </Button>
-          </div>
+          {canManage ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={showConcludeTournament ? onConcludeTournament : onGenerateRound}
+                disabled={isTournamentConcluded || !registrationClosed || (showConcludeTournament ? !canConcludeTournament : !canGenerateNextRound) || isGenerating}
+              >
+                {isGenerating ? roundActionPendingLabel : roundActionLabel}
+              </Button>
+              <Button variant="destructive" onClick={onDeleteLatestRound} disabled={!isLatestRoundSelected || isDeleting}>
+                {isDeleting ? "Eliminazione..." : `Elimina turno ${latestRound.number}`}
+              </Button>
+            </div>
+          ) : null}
         </div>
         <div className="space-y-3">
               {tournamentType === "team"
@@ -161,11 +167,11 @@ export function RoundsPanel({
             return (
               <Card
                 key={pairing.id}
-                className={`border border-[var(--border)] ${isLatestRoundSelected && !pairing.is_bye ? "cursor-pointer" : "cursor-default"}`}
-                onClick={() => {
-                  if (!isLatestRoundSelected || pairing.is_bye) return;
-                  setExpandedPairingId((current) => (current === pairing.id ? null : pairing.id));
-                }}
+                 className={`border border-[var(--border)] ${canManage && isLatestRoundSelected && !pairing.is_bye ? "cursor-pointer" : "cursor-default"}`}
+                 onClick={() => {
+                   if (!canManage || !isLatestRoundSelected || pairing.is_bye) return;
+                   setExpandedPairingId((current) => (current === pairing.id ? null : pairing.id));
+                 }}
               >
                 <CardContent className="space-y-3 py-3">
                   <div className="grid gap-2 lg:grid-cols-[56px_1fr_120px_1fr] lg:items-stretch">
@@ -178,7 +184,7 @@ export function RoundsPanel({
                     </div>
                     <PlayerMatchCard player={blackPlayer} standing={blackStanding} category={category} isBye={pairing.is_bye} />
                   </div>
-                  {!pairing.is_bye && isLatestRoundSelected && expandedPairingId === pairing.id ? (
+                  {!pairing.is_bye && canManage && isLatestRoundSelected && expandedPairingId === pairing.id ? (
                     <div className="flex flex-wrap justify-center gap-2 pt-1">
                       {results.map((result) => (
                         <Button

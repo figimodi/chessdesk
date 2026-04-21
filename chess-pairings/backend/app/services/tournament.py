@@ -9,11 +9,13 @@ from app.models.pairing import Pairing
 from app.models.round import Round
 from app.models.team import Team
 from app.models.tournament import Tournament, TournamentPlayer, TournamentPlayerAvailability
+from app.models.user import User
 from app.schemas.team import TeamRead
 from app.schemas.tournament import (
     TournamentCreate,
     TournamentDetail,
     TournamentListItem,
+    TournamentPublicRegistration,
     TournamentPlayerAssign,
     TournamentPlayerAvailabilityUpdate,
     TournamentPlayerRead,
@@ -21,6 +23,7 @@ from app.schemas.tournament import (
     TournamentUpdate,
 )
 from app.services.files import FileStorageService
+from app.services import player as player_service
 from app.services.seeding import get_player_seed_numbers
 from app.services.standings import StandingsService
 from app.services.team_standings import TeamStandingsService
@@ -56,26 +59,60 @@ def _detail_options():
     ]
 
 
-async def get_tournaments(db: AsyncSession) -> list[Tournament]:
-    result = await db.execute(
-        select(Tournament)
-        .options(
-            selectinload(Tournament.players),
-            selectinload(Tournament.teams),
-        )
-        .order_by(Tournament.start_date.desc())
-    )
-    return list(result.scalars().all())
+def _apply_tournament_scope(statement, user: User):
+    if user.role.value == "admin":
+        return statement
+    return statement.where(Tournament.owner_id == user.id)
 
 
-async def get_tournament(db: AsyncSession, tournament_id: int) -> Tournament | None:
+def can_manage_tournament(tournament: Tournament, user: User | None) -> bool:
+    if user is None:
+        return False
+    return user.role.value == "admin" or tournament.owner_id == user.id
+
+
+async def _get_tournament_unscoped(db: AsyncSession, tournament_id: int) -> Tournament | None:
     result = await db.execute(
         select(Tournament).where(Tournament.id == tournament_id).options(*_detail_options())
     )
     return result.scalar_one_or_none()
 
 
-async def create_tournament(db: AsyncSession, data: TournamentCreate) -> Tournament:
+async def _get_tournament_unscoped_list(db: AsyncSession) -> list[Tournament]:
+    result = await db.execute(
+        select(Tournament)
+        .options(selectinload(Tournament.players), selectinload(Tournament.teams))
+        .order_by(Tournament.start_date.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_tournaments(db: AsyncSession, user: User) -> list[Tournament]:
+    result = await db.execute(
+        _apply_tournament_scope(
+            select(Tournament)
+            .options(
+                selectinload(Tournament.players),
+                selectinload(Tournament.teams),
+            )
+            .order_by(Tournament.start_date.desc()),
+            user,
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def get_tournament(db: AsyncSession, tournament_id: int, user: User) -> Tournament | None:
+    result = await db.execute(
+        _apply_tournament_scope(
+            select(Tournament).where(Tournament.id == tournament_id).options(*_detail_options()),
+            user,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_tournament(db: AsyncSession, data: TournamentCreate, owner: User) -> Tournament:
     payload = data.model_dump(exclude={"round_schedule", "tie_breaks"})
     if data.type == "team":
         if payload.get("match_points_win") is None:
@@ -84,7 +121,7 @@ async def create_tournament(db: AsyncSession, data: TournamentCreate) -> Tournam
             payload["match_points_draw"] = 1
         if payload.get("match_points_loss") is None:
             payload["match_points_loss"] = 0
-    tournament = Tournament(**payload, tie_breaks=_serialize_tie_breaks(data.tie_breaks))
+    tournament = Tournament(**payload, tie_breaks=_serialize_tie_breaks(data.tie_breaks), owner_id=owner.id)
     db.add(tournament)
     await db.flush()
 
@@ -93,7 +130,7 @@ async def create_tournament(db: AsyncSession, data: TournamentCreate) -> Tournam
         db.add(Round(tournament_id=tournament.id, number=index + 1, scheduled_at=scheduled_at))
 
     await db.commit()
-    return await get_tournament(db, tournament.id)
+    return await get_tournament(db, tournament.id, owner)
 
 
 async def update_tournament(
@@ -123,7 +160,7 @@ async def update_tournament(
             )
 
     await db.commit()
-    return await get_tournament(db, tournament.id)
+    return await _get_tournament_unscoped(db, tournament.id)
 
 
 async def delete_tournament(db: AsyncSession, tournament: Tournament) -> None:
@@ -168,7 +205,7 @@ async def assign_player(
     )
     db.add(entry)
     await db.commit()
-    refreshed = await get_tournament(db, tournament.id)
+    refreshed = await _get_tournament_unscoped(db, tournament.id)
     matched = next(
         (item for item in refreshed.players if item.player_id == data.player_id),
         None,
@@ -187,6 +224,68 @@ async def assign_player(
         )
         matched = result.scalar_one()
     return matched
+
+
+async def register_public_player(
+    db: AsyncSession, tournament: Tournament, data: TournamentPublicRegistration
+) -> TournamentPlayer:
+    if tournament.is_registration_closed:
+        raise HTTPException(status_code=409, detail="Tournament registration is closed")
+
+    if data.fide_id:
+        existing_fide_entry = next(
+            (
+                entry
+                for entry in tournament.players
+                if entry.player.fide_id and entry.player.fide_id == data.fide_id.strip()
+            ),
+            None,
+        )
+        if existing_fide_entry is not None:
+            raise HTTPException(status_code=409, detail="Player already registered in this tournament")
+
+        player = await player_service.import_player_from_fide(db, data.fide_id)
+    else:
+        full_name = f"{(data.last_name or '').strip()}, {(data.first_name or '').strip()}"
+        existing_manual_entry = next(
+            (
+                entry
+                for entry in tournament.players
+                if entry.player.full_name.strip().lower() == full_name.lower()
+            ),
+            None,
+        )
+        if existing_manual_entry is not None:
+            raise HTTPException(status_code=409, detail="A player with the same name is already registered in this tournament")
+
+        player = await player_service.create_public_manual_player(
+            db,
+            first_name=data.first_name or "",
+            last_name=data.last_name or "",
+        )
+
+    return await assign_player(
+        db,
+        tournament,
+        TournamentPlayerAssign(player_id=player.id),
+    )
+
+
+async def remove_player(
+    db: AsyncSession, tournament: Tournament, player_id: int
+) -> None:
+    if any(round_model.pairings for round_model in tournament.rounds):
+        raise HTTPException(
+            status_code=409,
+            detail="Non puoi rimuovere partecipanti dopo che e' stato generato almeno un turno.",
+        )
+
+    entry = next((item for item in tournament.players if item.player_id == player_id), None)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Player not found in tournament")
+
+    await db.delete(entry)
+    await db.commit()
 
 
 async def upload_bulletin(
@@ -222,7 +321,7 @@ async def close_registration(db: AsyncSession, tournament: Tournament) -> Tourna
 
     tournament.is_registration_closed = True
     await db.commit()
-    return await get_tournament(db, tournament.id)
+    return await _get_tournament_unscoped(db, tournament.id)
 
 
 async def reopen_registration(db: AsyncSession, tournament: Tournament) -> Tournament:
@@ -238,7 +337,7 @@ async def reopen_registration(db: AsyncSession, tournament: Tournament) -> Tourn
 
     tournament.is_registration_closed = False
     await db.commit()
-    return await get_tournament(db, tournament.id)
+    return await _get_tournament_unscoped(db, tournament.id)
 
 
 def serialize_tournament_player(entry: TournamentPlayer) -> TournamentPlayerRead:
@@ -299,7 +398,7 @@ async def update_player_availability(
         entry.is_active = True
 
     await db.commit()
-    refreshed = await get_tournament(db, tournament.id)
+    refreshed = await _get_tournament_unscoped(db, tournament.id)
     return next(item for item in refreshed.players if item.player_id == player_id)
 
 
@@ -328,7 +427,7 @@ async def update_player_status(
             else:
                 availability.is_available = False
     await db.commit()
-    refreshed = await get_tournament(db, tournament.id)
+    refreshed = await _get_tournament_unscoped(db, tournament.id)
     return next(item for item in refreshed.players if item.player_id == player_id)
 
 
@@ -361,7 +460,9 @@ def serialize_round(round_model: Round) -> dict:
     }
 
 
-def serialize_tournament_list_item(tournament: Tournament) -> TournamentListItem:
+def serialize_tournament_list_item(
+    tournament: Tournament, user: User | None = None
+) -> TournamentListItem:
     is_team_tournament = tournament.type == "team"
     return TournamentListItem(
         id=tournament.id,
@@ -389,18 +490,19 @@ def serialize_tournament_list_item(tournament: Tournament) -> TournamentListItem
         bulletin_url=FileStorageService().public_url(tournament.bulletin_path),
         players_count=len(tournament.players),
         teams_count=len(tournament.teams),
+        can_manage=can_manage_tournament(tournament, user),
     )
 
 
 async def serialize_tournament_detail(
-    db: AsyncSession, tournament: Tournament
+    db: AsyncSession, tournament: Tournament, user: User | None = None
 ) -> TournamentDetail:
     standings = StandingsService().build_standings(tournament)
     team_standings = TeamStandingsService().build_standings(tournament) if tournament.type == "team" else []
     teams = await team_service.get_teams(db, tournament.id)
 
     return TournamentDetail(
-        **serialize_tournament_list_item(tournament).model_dump(),
+        **serialize_tournament_list_item(tournament, user).model_dump(),
         rounds=[serialize_round(item) for item in sorted(tournament.rounds, key=lambda item: item.number)],
         standings=standings,
         team_standings=team_standings,

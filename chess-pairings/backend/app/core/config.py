@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     BBP_PAIRINGS_SYSTEM: str = "dutch"
 
     PLAYER_LIST_FILE: str = str(BACKEND_ROOT / "data" / "players_list_foa.txt")
+    AUTH_SECRET_KEY: str = "change-me"
+    AUTH_TOKEN_TTL_HOURS: int = 12
+    ADMIN_EMAIL: str | None = None
+    ADMIN_PASSWORD: str | None = None
+    ADMIN_USERNAME: str | None = None
 
 
 settings = Settings()

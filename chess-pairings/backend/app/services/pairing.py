@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from app.models.pairing import Pairing, PairingResult
 from app.models.round import Round
 from app.models.tournament import RoundStatus, Tournament
+from app.models.user import User
 from app.schemas.pairing import PairingCreateResponse, PairingResultUpdate
 from app.services.bbp_pairings import BbpPairingsService
 from app.services.standings import StandingsService
@@ -13,13 +14,18 @@ from app.services.team_pairings import TeamPairingsService
 from app.services import tournament as tournament_service
 
 
-async def get_pairing(db: AsyncSession, pairing_id: int) -> Pairing | None:
+async def get_pairing(db: AsyncSession, pairing_id: int, user: User) -> Pairing | None:
     result = await db.execute(
         select(Pairing)
         .where(Pairing.id == pairing_id)
-        .options(selectinload(Pairing.round))
+        .options(selectinload(Pairing.round).selectinload(Round.tournament))
     )
-    return result.scalar_one_or_none()
+    pairing = result.scalar_one_or_none()
+    if pairing is None:
+        return None
+    if user.role.value != "admin" and pairing.round.tournament.owner_id != user.id:
+        return None
+    return pairing
 
 
 async def _get_round(db: AsyncSession, round_id: int) -> Round | None:
@@ -111,7 +117,7 @@ async def generate_pairings(
     next_round.status = RoundStatus.published
     await db.commit()
 
-    refreshed_tournament = await tournament_service.get_tournament(db, tournament.id)
+    refreshed_tournament = await tournament_service._get_tournament_unscoped(db, tournament.id)
     refreshed_round = await _get_round(db, next_round.id)
 
     return PairingCreateResponse(
@@ -189,7 +195,7 @@ async def delete_latest_round(db: AsyncSession, tournament: Tournament) -> dict:
     latest_round.status = RoundStatus.pending
     await db.commit()
 
-    refreshed_tournament = await tournament_service.get_tournament(db, tournament.id)
+    refreshed_tournament = await tournament_service._get_tournament_unscoped(db, tournament.id)
     return {
         "ok": True,
         "deletedRound": latest_round.number,

@@ -25,6 +25,11 @@ services:
       BBP_PAIRINGS_SYSTEM: ${BBP_PAIRINGS_SYSTEM:-dutch}
       FILES_BASE_URL: ${FILES_BASE_URL:-http://localhost:8010}
       PLAYER_LIST_FILE: ${PLAYER_LIST_FILE:-/app/data/players_list_foa.txt}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
+      AUTH_TOKEN_TTL_HOURS: ${AUTH_TOKEN_TTL_HOURS:-12}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
     depends_on:
       postgres:
         condition: service_healthy

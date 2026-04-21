@@ -146,6 +146,46 @@ chess-pairings/
 
 ## Backend
 
+### Accesso e profili
+
+La homepage e la consultazione dei tornei sono pubbliche. Le operazioni di gestione richiedono autenticazione.
+
+Modello di accesso:
+
+- un account `admin`, creato o aggiornato automaticamente all'avvio tramite variabili ambiente
+- account `user` creati dall'admin dalla webapp
+- un visitatore anonimo puo' vedere tutti i tornei ma non puo' modificarli
+- l'admin vede e gestisce tutti i tornei
+- ogni `user` puo' vedere tutti i tornei ma modifica solo quelli di cui e' proprietario
+- gli utenti creati dall'admin devono cambiare la password al primo login prima di usare l'app
+- i visitatori possono iscriversi pubblicamente ai tornei con iscrizioni aperte
+
+### Iscrizione pubblica ai tornei
+
+Un visitatore puo' iscriversi a un torneo direttamente:
+
+- cercando il proprio nominativo nel catalogo FIDE
+- oppure inserendosi manualmente con `cognome` e `nome`
+
+Per le iscrizioni manuali il rating iniziale assegnato e' `1399`.
+
+I pulsanti di iscrizione sono disponibili:
+
+- nelle card torneo della homepage
+- nella pagina di dettaglio del torneo
+
+Variabili ambiente rilevanti:
+
+- `AUTH_SECRET_KEY`
+- `AUTH_TOKEN_TTL_HOURS`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `ADMIN_USERNAME`
+
+Il primo admin viene bootstrapato automaticamente all'avvio del backend solo se `ADMIN_EMAIL`, `ADMIN_PASSWORD` e `ADMIN_USERNAME` sono valorizzati.
+
+Il login applicativo usa lo `username`, non l'email. La login form principale e' nella homepage.
+
 ### Pattern applicato
 
 Come in `kasparov-webapp`, il backend usa:
@@ -225,9 +265,13 @@ Il frontend usa `Tailwind CSS + shadcn/ui`.
 
 ## API disponibili
 
+- `POST /api/v1/auth/login`
+- `GET /api/v1/auth/me`
+- `POST /api/v1/auth/change-password`
 - `GET /health`
 - `GET /api/v1/tournaments/`
 - `GET /api/v1/tournaments/{tournament_id}`
+- `POST /api/v1/tournaments/{tournament_id}/register`
 - `POST /api/v1/admin/tournaments/`
 - `PUT /api/v1/admin/tournaments/{tournament_id}`
 - `DELETE /api/v1/admin/tournaments/{tournament_id}`
@@ -236,6 +280,9 @@ Il frontend usa `Tailwind CSS + shadcn/ui`.
 - `GET /api/v1/players/`
 - `GET /api/v1/players/fide/search`
 - `POST /api/v1/admin/players/import-from-fide`
+- `GET /api/v1/admin/users/`
+- `POST /api/v1/admin/users/`
+- `PATCH /api/v1/admin/users/{user_id}`
 - `GET /api/v1/admin/tournaments/{tournament_id}/teams/`
 - `POST /api/v1/admin/tournaments/{tournament_id}/teams/`
 - `POST /api/v1/admin/tournaments/{tournament_id}/pairings/generate`

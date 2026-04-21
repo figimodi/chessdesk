@@ -28,6 +28,7 @@ export type TournamentListItem = {
   bulletin_url?: string | null;
   players_count: number;
   teams_count: number;
+  can_manage: boolean;
 };
 
 export type TournamentPlayer = {
@@ -189,3 +190,43 @@ export type FidePlayer = {
   birth_year?: number | null;
   fide_title?: string | null;
 };
+
+export type UserRole = 'admin' | 'user'
+
+export type User = {
+  id: number
+  email: string
+  username: string
+  role: UserRole
+  is_active: boolean
+  must_change_password: boolean
+}
+
+export type AuthToken = {
+  access_token: string
+  token_type: 'bearer'
+  user: User
+}
+
+export type UserCreate = {
+  email: string
+  username: string
+  password: string
+}
+
+export type UserUpdate = {
+  username?: string
+  password?: string
+  is_active?: boolean
+}
+
+export type TournamentPublicRegistration = {
+  fide_id?: string
+  first_name?: string
+  last_name?: string
+}
+
+export type PasswordChangeRequest = {
+  current_password: string
+  new_password: string
+}

@@ -164,6 +164,7 @@ class TournamentListItem(TournamentBase):
     bulletin_url: str | None = None
     players_count: int = 0
     teams_count: int = 0
+    can_manage: bool = False
 
 
 class TournamentPlayerAssign(ORMModel):
@@ -173,6 +174,20 @@ class TournamentPlayerAssign(ORMModel):
     seed_number: int | None = None
     initial_rating: int | None = None
     allow_late_join: bool = False
+
+
+class TournamentPublicRegistration(ORMModel):
+    fide_id: str | None = Field(default=None, min_length=4, max_length=20)
+    first_name: str | None = Field(default=None, min_length=2, max_length=60)
+    last_name: str | None = Field(default=None, min_length=2, max_length=60)
+
+    @model_validator(mode="after")
+    def validate_registration_payload(self):
+        has_fide = bool(self.fide_id)
+        has_manual_identity = bool(self.first_name and self.last_name)
+        if has_fide == has_manual_identity:
+            raise ValueError("Provide either a fide_id or first_name and last_name")
+        return self
 
 
 class TournamentPlayerAvailabilityUpdate(ORMModel):

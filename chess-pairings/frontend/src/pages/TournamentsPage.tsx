@@ -1,30 +1,68 @@
-import type { ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, CalendarDays, ChartColumn, Clock3, Hash, MapPin, Paperclip, Plus, User, Users, Zap, Turtle } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { ArrowRight, CalendarDays, ChartColumn, Clock3, Hash, LockKeyhole, MapPin, Paperclip, Plus, Search, User, Users, Zap, Turtle } from "lucide-react";
 import { useTournaments } from "@/api/hooks/tournaments";
+import { useAuth } from "@/auth/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { TournamentRegistrationDialog } from "@/components/tournaments/TournamentRegistrationDialog";
 
 export function TournamentsPage() {
+  const { isAuthenticated, user } = useAuth();
   const { data: tournaments, isLoading } = useTournaments();
   const navigate = useNavigate();
-  const groupedTournaments = groupTournamentsByMonth(tournaments ?? []);
+  const [query, setQuery] = useState("");
+  const [registrationTournamentId, setRegistrationTournamentId] = useState<number | null>(null);
+  const filteredTournaments = useMemo(
+    () => filterTournamentsByName(tournaments ?? [], query),
+    [query, tournaments],
+  );
+  const groupedTournaments = groupTournamentsByMonth(filteredTournaments);
+  const registrationTournament = filteredTournaments.find((tournament) => tournament.id === registrationTournamentId) ?? null;
+
+  if (isAuthenticated && user?.must_change_password) {
+    return <Navigate replace to="/change-password" />;
+  }
 
   return (
     <AppShell>
+      {registrationTournament ? (
+        <TournamentRegistrationDialog onClose={() => setRegistrationTournamentId(null)} tournament={registrationTournament} />
+      ) : null}
       <section className="mb-8 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold">Tornei</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">Gestisci e apri i tornei disponibili.</p>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            {isAuthenticated
+              ? user?.role === "admin"
+                ? "Controlla tutti i tornei della piattaforma e gestisci gli account."
+                : "Consulta tutti i tornei pubblici e gestisci solo quelli di cui sei proprietario."
+              : "Consulta tutti i tornei pubblici. Accedi dalla home per crearne o gestirne uno."}
+          </p>
         </div>
-        <Button asChild>
-          <Link to="/tournaments/new">
-            <Plus className="h-4 w-4" />
-            Crea torneo
-          </Link>
-        </Button>
+        {isAuthenticated ? (
+          <Button asChild>
+            <Link to="/tournaments/new">
+              <Plus className="h-4 w-4" />
+              Crea torneo
+            </Link>
+          </Button>
+        ) : null}
+      </section>
+
+      <section className="mb-8">
+        <div className="relative max-w-xl">
+          <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-[var(--muted-foreground)]" />
+          <Input
+            className="pl-9"
+            placeholder="Cerca tornei per nome"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
       </section>
 
       <section className="space-y-4">
@@ -37,7 +75,6 @@ export function TournamentsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <CardTitle>{tournament.name}</CardTitle>
-                      <CardDescription>{tournament.venue ?? "Sede da definire"}</CardDescription>
                     </div>
                     <Badge>{tournament.type === "team" ? "Squadre" : "Individuale"}</Badge>
                   </div>
@@ -57,8 +94,21 @@ export function TournamentsPage() {
                       {tournament.bulletin_url ? (
                         <InfoChip icon={<Paperclip className="h-4 w-4" />} label="Bando" href={tournament.bulletin_url} />
                       ) : null}
+                      {!tournament.is_registration_closed ? (
+                        <Button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setRegistrationTournamentId(tournament.id);
+                          }}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          Iscriviti
+                        </Button>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap gap-2 text-sm text-[var(--muted-foreground)] md:justify-end">
+                      {tournament.can_manage ? <InfoChip icon={<LockKeyhole className="h-4 w-4" />} label="Gestibile" /> : null}
                       <InfoChip icon={timeControlIcon(tournament.time_control_category)} label={tournament.time_control} />
                       <InfoChip
                         icon={tournament.type === "team" ? <Users className="h-4 w-4" /> : <User className="h-4 w-4" />}
@@ -72,18 +122,26 @@ export function TournamentsPage() {
             ))}
           </div>
         ))}
-        {!isLoading && !tournaments?.length ? (
+        {!isLoading && !filteredTournaments.length ? (
           <Card>
             <CardContent className="flex items-center justify-between pt-6">
               <div>
-                <CardTitle>Nessun torneo configurato</CardTitle>
-                <CardDescription>Crea il primo torneo per iniziare la gestione pairings.</CardDescription>
+                <CardTitle>{query.trim() ? "Nessun torneo trovato" : "Nessun torneo configurato"}</CardTitle>
+                <CardDescription>
+                  {query.trim()
+                    ? "Prova a cercare con un'altra parola del nome del torneo."
+                    : isAuthenticated
+                      ? "Crea il primo torneo per iniziare la gestione pairings."
+                      : "Non ci sono ancora tornei pubblicati."}
+                </CardDescription>
               </div>
-              <Button asChild>
-                <Link to="/tournaments/new">
-                  Inizia <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
+              {isAuthenticated ? (
+                <Button asChild>
+                  <Link to="/tournaments/new">
+                    Inizia <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
         ) : null}
@@ -182,4 +240,27 @@ function groupTournamentsByMonth<T extends { start_date: string } & { id: number
   });
 
   return groups;
+}
+
+function filterTournamentsByName<T extends { name: string }>(tournaments: T[], query: string) {
+  const normalizedQuery = normalizeSearch(query)
+  if (!normalizedQuery) {
+    return tournaments
+  }
+
+  const queryTerms = normalizedQuery.split(" ").filter(Boolean)
+  return tournaments.filter((tournament) => {
+    const normalizedName = normalizeSearch(tournament.name)
+    return queryTerms.every((term) => normalizedName.includes(term))
+  })
+}
+
+function normalizeSearch(value: string) {
+  return value
+    .toLocaleLowerCase()
+    .normalize("NFD")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
 }

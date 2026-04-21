@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { isAxiosError } from "axios";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { CalendarDays, ChartColumn, Clock3, Hash, MapPin, Paperclip, User, Users, Zap, Turtle } from "lucide-react";
 import { api } from "@/api/client";
 import { useFideSearch, useImportPlayerFromFide } from "@/api/hooks/players";
@@ -9,6 +9,7 @@ import {
   useAssignPlayer,
   useCloseRegistration,
   useCreateTeam,
+  useRemovePlayer,
   useDeleteTeam,
   useDeleteLatestRound,
   useGeneratePairings,
@@ -36,12 +37,16 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { queryClient } from "@/api/queryClient";
 import { getFederationFlagUrl } from "@/lib/federationFlags";
+import { useAuth } from "@/auth/AuthContext";
+import { TournamentRegistrationDialog } from "@/components/tournaments/TournamentRegistrationDialog";
 
 export function TournamentDetailPage() {
+  const { isAuthenticated, user } = useAuth();
   const { tournamentId = "" } = useParams();
   const navigate = useNavigate();
   const { data: tournament } = useTournament(tournamentId);
   const assignMutation = useAssignPlayer(tournamentId);
+  const removePlayerMutation = useRemovePlayer(tournamentId);
   const createTeamMutation = useCreateTeam(tournamentId);
   const deleteTeamMutation = useDeleteTeam(tournamentId);
   const assignTeamMemberMutation = useAssignTeamMember(tournamentId);
@@ -65,7 +70,9 @@ export function TournamentDetailPage() {
   const [isTournamentConcluded, setIsTournamentConcluded] = useState(false);
   const [expandedTeamStandingId, setExpandedTeamStandingId] = useState<number | null>(null);
   const [alertMessage, setAlertMessage] = useState("");
+  const [isRegistrationDialogOpen, setIsRegistrationDialogOpen] = useState(false);
   const [selectedPlayerForManagement, setSelectedPlayerForManagement] = useState<number | null>(null);
+  const [selectedParticipantId, setSelectedParticipantId] = useState<number | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
     description: string;
@@ -211,6 +218,12 @@ export function TournamentDetailPage() {
     return <AppShell>Caricamento torneo...</AppShell>;
   }
 
+  if (isAuthenticated && user?.must_change_password) {
+    return <Navigate replace to="/change-password" />;
+  }
+
+  const canManage = isAuthenticated && tournament.can_manage;
+
   const catalogPageSize = 5;
   const catalogTotalPages = Math.max(1, Math.ceil(unassignedCatalogPlayers.length / catalogPageSize));
   const safeCatalogPage = Math.min(catalogPage, catalogTotalPages);
@@ -234,6 +247,9 @@ export function TournamentDetailPage() {
 
   return (
     <AppShell>
+      {isRegistrationDialogOpen ? (
+        <TournamentRegistrationDialog onClose={() => setIsRegistrationDialogOpen(false)} tournament={tournament} />
+      ) : null}
       {alertMessage ? <AlertCard message={alertMessage} onClose={() => setAlertMessage("")} /> : null}
       <ConfirmDialog
         open={confirmDialog !== null}
@@ -253,7 +269,7 @@ export function TournamentDetailPage() {
           }
         }}
       />
-      {managedPlayer && tournament.type !== "team" ? (
+      {managedPlayer && canManage && tournament.type !== "team" ? (
         <PlayerAvailabilityDialog
           player={managedPlayer}
           roundsCount={tournament.rounds_count}
@@ -307,28 +323,35 @@ export function TournamentDetailPage() {
                 <InfoChip icon={<Hash className="h-4 w-4" />} label={`${tournament.rounds_count} turni`} />
               </div>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <Button variant="secondary" asChild className="bg-yellow-100 text-yellow-900 hover:bg-yellow-200 border border-yellow-200">
-                <Link to={`/tournaments/${tournament.id}/edit`}>Modifica</Link>
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  setConfirmDialog({
-                    title: "Elimina torneo",
-                    description: "Sei sicuro di voler eliminare questo torneo?",
-                    confirmLabel: "Elimina torneo",
-                    confirmVariant: "destructive",
-                    action: async () => {
-                      await api.deleteTournament(String(tournament.id));
-                      navigate("/");
-                    },
-                  });
-                }}
-              >
-                Elimina
-              </Button>
-            </div>
+            {!tournament.is_registration_closed ? (
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => setIsRegistrationDialogOpen(true)} variant="secondary">Iscriviti al torneo</Button>
+              </div>
+            ) : null}
+            {canManage ? (
+              <div className="flex flex-wrap gap-3">
+                <Button variant="secondary" asChild className="bg-yellow-100 text-yellow-900 hover:bg-yellow-200 border border-yellow-200">
+                  <Link to={`/tournaments/${tournament.id}/edit`}>Modifica</Link>
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setConfirmDialog({
+                      title: "Elimina torneo",
+                      description: "Sei sicuro di voler eliminare questo torneo?",
+                      confirmLabel: "Elimina torneo",
+                      confirmVariant: "destructive",
+                      action: async () => {
+                        await api.deleteTournament(String(tournament.id));
+                        navigate("/");
+                      },
+                    });
+                  }}
+                >
+                  Elimina
+                </Button>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </section>
@@ -358,6 +381,7 @@ export function TournamentDetailPage() {
               <CardDescription>Cerca un giocatore nel catalogo e aggiungilo direttamente al torneo.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {canManage ? (
               <Card className="border border-dashed">
                 <CardHeader>
                   <CardTitle className="text-lg">Ricerca giocatori</CardTitle>
@@ -440,6 +464,7 @@ export function TournamentDetailPage() {
                   ) : null}
                 </CardContent>
               </Card>
+              ) : null}
 
               <div className="overflow-x-auto">
                 <Table>
@@ -458,11 +483,14 @@ export function TournamentDetailPage() {
                     {sortedParticipants.map((player, index) => (
                       <TableRow
                         key={player.player_id}
-                        className={tournament.type === "team" ? "cursor-default" : "cursor-pointer"}
-                        onClick={() => {
-                          if (tournament.type === "team") return;
-                          setSelectedPlayerForManagement(player.player_id);
-                        }}
+                         className={[
+                           !canManage ? "cursor-default" : "cursor-pointer",
+                           selectedParticipantId === player.player_id ? "bg-[var(--muted)]" : "",
+                         ].join(" ")}
+                         onClick={() => {
+                           if (!canManage) return;
+                           setSelectedParticipantId((current) => current === player.player_id ? null : player.player_id);
+                           }}
                       >
                         <TableCell>{player.seed_number ?? index + 1}</TableCell>
                         <TableCell className="min-w-56">{player.full_name}</TableCell>
@@ -479,7 +507,42 @@ export function TournamentDetailPage() {
                 </Table>
               </div>
 
-              <div className="flex justify-end">
+              {canManage && selectedParticipantId ? (
+                <div className="flex justify-end gap-3">
+                  {tournament.type !== "team" ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => setSelectedPlayerForManagement(selectedParticipantId)}
+                    >
+                      Gestisci partecipante
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      const selectedParticipant = sortedParticipants.find((player) => player.player_id === selectedParticipantId)
+                      if (!selectedParticipant) return
+                      setConfirmDialog({
+                        title: "Rimuovi partecipante",
+                        description: `Vuoi davvero rimuovere ${selectedParticipant.full_name} dal torneo?`,
+                        confirmLabel: "Rimuovi partecipante",
+                        confirmVariant: "destructive",
+                        action: async () => {
+                          await removePlayerMutation.mutateAsync(selectedParticipant.player_id)
+                          setSelectedParticipantId(null)
+                          if (selectedPlayerForManagement === selectedParticipant.player_id) {
+                            setSelectedPlayerForManagement(null)
+                          }
+                        },
+                      })
+                    }}
+                  >
+                    Elimina partecipante
+                  </Button>
+                </div>
+              ) : null}
+
+              {canManage ? <div className="flex justify-end">
                 <Button
                   variant={tournament.is_registration_closed ? "destructive" : "default"}
                   onClick={() => {
@@ -509,13 +572,14 @@ export function TournamentDetailPage() {
                 >
                   {tournament.is_registration_closed ? "Riapri iscrizioni" : "Chiudi iscrizioni"}
                 </Button>
-              </div>
+              </div> : null}
             </CardContent>
           </Card>
         ) : null}
 
         {activeTab === "teams" && tournament.type === "team" ? (
           <TeamsPanel
+            canManage={canManage}
             teams={tournament.teams}
             players={tournament.players}
             roundsCount={tournament.rounds_count}
@@ -676,6 +740,7 @@ export function TournamentDetailPage() {
 
         {activeTab === "rounds" ? (
           <RoundsPanel
+            canManage={canManage}
             rounds={generatedRounds}
             standings={tournament.standings}
             players={tournament.players}
