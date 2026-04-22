@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
-import { useAuth } from '@/auth/AuthContext'
+import { useAuth } from '@/auth/useAuth'
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage'
 import { ConfirmEmailPage } from '@/pages/ConfirmEmailPage'
 import { LoginPage } from '@/pages/LoginPage'

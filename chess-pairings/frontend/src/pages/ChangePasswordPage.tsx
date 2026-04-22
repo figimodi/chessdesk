@@ -1,7 +1,7 @@
 import { isAxiosError } from 'axios'
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
-import { useAuth } from '@/auth/AuthContext'
+import { useAuth } from '@/auth/useAuth'
 import { AlertCard } from '@/components/ui/alert-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'

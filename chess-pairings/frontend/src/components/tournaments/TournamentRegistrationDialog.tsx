@@ -241,17 +241,14 @@ function TeamTournamentRegistrationContent({ onClose, tournament }: { onClose: (
   }
 
   async function handleCreateTeam() {
-    const captain = teammates[0];
-    if (!captain) return;
-    const otherTeammates = teammates.slice(1);
+    if (!teammates.length) return;
     setFeedback(null);
     try {
       const response = await createMutation.mutateAsync({
         team_name: teamName.trim(),
-        captain: teammateToPayload(captain),
-        teammate_player_ids: otherTeammates.filter((entry) => entry.kind === "existing").map((entry) => entry.playerId ?? 0),
-        teammate_fide_ids: otherTeammates.filter((entry) => entry.kind === "fide").map((entry) => entry.fideId ?? ""),
-        teammate_manual_entries: otherTeammates
+        teammate_player_ids: teammates.filter((entry) => entry.kind === "existing").map((entry) => entry.playerId ?? 0),
+        teammate_fide_ids: teammates.filter((entry) => entry.kind === "fide").map((entry) => entry.fideId ?? ""),
+        teammate_manual_entries: teammates
           .filter((entry) => entry.kind === "manual")
           .map((entry) => ({ first_name: entry.firstName, last_name: entry.lastName })),
       });
@@ -619,7 +616,7 @@ function RosterRow({
             size="sm"
             type="button"
             variant="outline"
-            className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+            className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
             aria-label="Rimuovi membro"
             title="Rimuovi membro"
           >
@@ -893,12 +890,6 @@ function buildDraftTeammate(payload: TournamentPublicRegistration, label: string
     firstName: payload.first_name,
     lastName: payload.last_name,
   };
-}
-
-function teammateToPayload(teammate: DraftTeammate): TournamentPublicRegistration {
-  if (teammate.kind === "fide") return { fide_id: teammate.fideId };
-  if (teammate.kind === "manual") return { first_name: teammate.firstName, last_name: teammate.lastName };
-  return { first_name: teammate.label.split(", ")[1] ?? "", last_name: teammate.label.split(", ")[0] ?? "" };
 }
 
 function readErrorMessage(error: unknown) {

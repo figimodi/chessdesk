@@ -60,13 +60,13 @@ class TournamentBase(ORMModel):
     @classmethod
     def validate_tie_breaks(cls, value: list[str]):
         if not value:
-            raise ValueError("At least one tie-break must be selected")
+            raise ValueError("Devi selezionare almeno uno spareggio")
         normalized = [item.strip() for item in value if item.strip()]
         if len(normalized) != len(set(normalized)):
-            raise ValueError("Tie-breaks must be unique")
+            raise ValueError("Gli spareggi devono essere univoci")
         invalid = [item for item in normalized if item not in ALLOWED_TIE_BREAKS]
         if invalid:
-            raise ValueError(f"Unsupported tie-breaks: {', '.join(invalid)}")
+            raise ValueError(f"Spareggi non supportati: {', '.join(invalid)}")
         return normalized
 
     @field_validator("match_points_draw")
@@ -74,7 +74,7 @@ class TournamentBase(ORMModel):
     def validate_draw_points(cls, value: int | None, info):
         win_points = info.data.get("match_points_win")
         if value is not None and win_points is not None and value > win_points:
-            raise ValueError("draw points cannot exceed win points")
+            raise ValueError("I punti patta non possono superare i punti vittoria")
         return value
 
     @field_validator("match_points_loss")
@@ -82,7 +82,7 @@ class TournamentBase(ORMModel):
     def validate_loss_points(cls, value: int | None, info):
         draw_points = info.data.get("match_points_draw")
         if value is not None and draw_points is not None and value > draw_points:
-            raise ValueError("loss points cannot exceed draw points")
+            raise ValueError("I punti sconfitta non possono superare i punti patta")
         return value
 
     @model_validator(mode="after")
@@ -99,7 +99,7 @@ class TournamentBase(ORMModel):
         }
         missing = [key for key, value in required_values.items() if value is None]
         if missing:
-            raise ValueError(f"Missing team tournament settings: {', '.join(missing)}")
+            raise ValueError(f"Parametri mancanti del torneo a squadre: {', '.join(missing)}")
         if self.type == TournamentType.quadriglia:
             if self.max_players_per_team != 2 or self.boards_per_match != 2:
                 raise ValueError("Nei tornei Quadriglia ci devono essere esattamente 2 giocatori per squadra in ogni incontro.")
@@ -107,7 +107,7 @@ class TournamentBase(ORMModel):
                 raise ValueError("Nel tipo Quadriglia e consentito solo lo spareggio head_to_head.")
             return self
         if self.max_players_per_team < self.boards_per_match:
-            raise ValueError("max_players_per_team must be greater than or equal to boards_per_match")
+            raise ValueError("max_players_per_team deve essere maggiore o uguale a boards_per_match")
         return self
 
 
@@ -197,7 +197,7 @@ class TournamentPublicRegistration(ORMModel):
         has_fide = bool(self.fide_id)
         has_manual_identity = bool(self.first_name and self.last_name)
         if has_fide == has_manual_identity:
-            raise ValueError("Provide either a fide_id or first_name and last_name")
+            raise ValueError("Inserisci fide_id oppure nome e cognome")
         return self
 
 

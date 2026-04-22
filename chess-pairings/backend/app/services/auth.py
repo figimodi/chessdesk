@@ -77,7 +77,7 @@ def decode_email_confirmation_token(token: str) -> tuple[int, str, datetime]:
         payload_bytes = _b64decode(payload_part)
         provided_signature = _b64decode(signature_part)
     except (ValueError, json.JSONDecodeError):
-        raise HTTPException(status_code=400, detail="Invalid confirmation token")
+        raise HTTPException(status_code=400, detail="Token di conferma non valido")
 
     expected_signature = hmac.new(
         settings.AUTH_SECRET_KEY.encode("utf-8"),
@@ -85,13 +85,13 @@ def decode_email_confirmation_token(token: str) -> tuple[int, str, datetime]:
         hashlib.sha256,
     ).digest()
     if not hmac.compare_digest(provided_signature, expected_signature):
-        raise HTTPException(status_code=400, detail="Invalid confirmation token")
+        raise HTTPException(status_code=400, detail="Token di conferma non valido")
 
     payload = json.loads(payload_bytes.decode())
     if payload.get("purpose") != "email_confirmation":
-        raise HTTPException(status_code=400, detail="Invalid confirmation token")
+        raise HTTPException(status_code=400, detail="Token di conferma non valido")
     if payload.get("exp", 0) < int(datetime.now(timezone.utc).timestamp()):
-        raise HTTPException(status_code=400, detail="Confirmation token expired")
+        raise HTTPException(status_code=400, detail="Token di conferma scaduto")
 
     try:
         issued_at = payload["iat"]
@@ -103,7 +103,7 @@ def decode_email_confirmation_token(token: str) -> tuple[int, str, datetime]:
                 issued_at_dt = issued_at_dt.replace(tzinfo=timezone.utc)
         return int(payload["sub"]), str(payload["email"]), issued_at_dt
     except (KeyError, TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="Invalid confirmation token")
+        raise HTTPException(status_code=400, detail="Token di conferma non valido")
 
 
 def decode_access_token(token: str) -> int:
@@ -112,7 +112,7 @@ def decode_access_token(token: str) -> int:
         payload_bytes = _b64decode(payload_part)
         provided_signature = _b64decode(signature_part)
     except (ValueError, json.JSONDecodeError):
-        raise HTTPException(status_code=401, detail="Invalid authentication token")
+        raise HTTPException(status_code=401, detail="Token di autenticazione non valido")
 
     expected_signature = hmac.new(
         settings.AUTH_SECRET_KEY.encode("utf-8"),
@@ -120,13 +120,13 @@ def decode_access_token(token: str) -> int:
         hashlib.sha256,
     ).digest()
     if not hmac.compare_digest(provided_signature, expected_signature):
-        raise HTTPException(status_code=401, detail="Invalid authentication token")
+        raise HTTPException(status_code=401, detail="Token di autenticazione non valido")
 
     payload = json.loads(payload_bytes.decode())
     if payload.get("exp", 0) < int(datetime.now(timezone.utc).timestamp()):
-        raise HTTPException(status_code=401, detail="Authentication token expired")
+        raise HTTPException(status_code=401, detail="Token di autenticazione scaduto")
 
     try:
         return int(payload["sub"])
     except (KeyError, TypeError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid authentication token")
+        raise HTTPException(status_code=401, detail="Token di autenticazione non valido")

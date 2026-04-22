@@ -19,7 +19,7 @@ class BbpPairingsService:
         cli_exists = shutil.which(self.bin_path) or Path(self.bin_path).exists()
         if not cli_exists:
             raise PairingEngineError(
-                f"bbpPairings binary not found at '{self.bin_path}'. Install it or update BBP_PAIRINGS_BIN."
+                f"Binario bbpPairings non trovato in '{self.bin_path}'. Installalo o aggiorna BBP_PAIRINGS_BIN."
             )
 
         return self._run_bbp_cli(tournament)
@@ -33,7 +33,7 @@ class BbpPairingsService:
         command = [self.bin_path, f"--{self.system}", str(input_path), "-p", str(output_path), "-l", str(checklist_path)]
         completed = subprocess.run(command, check=False, capture_output=True, text=True)
         if completed.returncode != 0:
-            raise PairingEngineError(completed.stderr.strip() or "unknown bbpPairings error")
+            raise PairingEngineError(completed.stderr.strip() or "Errore sconosciuto di bbpPairings")
 
         return self._parse_pairings_output(output_path, tournament)
 
@@ -83,7 +83,7 @@ class BbpPairingsService:
         for round_model in sorted(tournament.rounds, key=lambda item: item.number):
             if not round_model.pairings:
                 return round_model.number
-        raise PairingEngineError("No available round found for pairing generation")
+        raise PairingEngineError("Nessun turno disponibile per la generazione degli abbinamenti")
 
     def _unavailable_pairing_numbers(self, ordered_players, pairing_numbers: dict[int, int], round_number: int) -> list[int]:
         unavailable = []
@@ -119,7 +119,7 @@ class BbpPairingsService:
 
             if player_pairing.result == PairingResult.unplayed:
                 raise PairingEngineError(
-                    f"Round {round_model.number} is not completed. Cannot generate the next round."
+                    f"Il turno {round_model.number} non e completato. Non posso generare il turno successivo."
                 )
 
             if player_pairing.is_bye:
@@ -158,12 +158,12 @@ class BbpPairingsService:
             return "1" if is_white else "0"
         if result == PairingResult.black_win:
             return "0" if is_white else "1"
-        raise PairingEngineError(f"Unsupported pairing result '{result}' for bbpPairings export")
+        raise PairingEngineError(f"Risultato di abbinamento '{result}' non supportato per l'export bbpPairings")
 
     def _parse_pairings_output(self, output_path: Path, tournament: Tournament) -> list[dict]:
         content = output_path.read_text(encoding="utf-8").splitlines()
         if not content:
-            raise PairingEngineError("bbpPairings produced an empty output file")
+            raise PairingEngineError("bbpPairings ha prodotto un file risultati vuoto")
 
         ordered_players = self._ordered_players(tournament)
         by_pairing_number = {
@@ -176,12 +176,12 @@ class BbpPairingsService:
                 continue
             parts = line.split()
             if len(parts) != 2:
-                raise PairingEngineError(f"Invalid bbpPairings output line: '{line}'")
+                raise PairingEngineError(f"Riga risultati di bbpPairings non valida: '{line}'")
 
             white_number, black_number = (int(parts[0]), int(parts[1]))
             white_player_id = by_pairing_number.get(white_number)
             if white_player_id is None:
-                raise PairingEngineError(f"Unknown white pairing number '{white_number}' in bbpPairings output")
+                raise PairingEngineError(f"Numero di abbinamento bianco sconosciuto '{white_number}' nei risultati bbpPairings")
 
             if black_number == 0:
                 rows.append(
@@ -195,7 +195,7 @@ class BbpPairingsService:
 
             black_player_id = by_pairing_number.get(black_number)
             if black_player_id is None:
-                raise PairingEngineError(f"Unknown black pairing number '{black_number}' in bbpPairings output")
+                raise PairingEngineError(f"Numero di abbinamento nero sconosciuto '{black_number}' nei risultati bbpPairings")
 
             rows.append(
                 {

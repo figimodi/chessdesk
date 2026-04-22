@@ -233,7 +233,6 @@ export type TournamentPublicRegistration = {
 
 export type PublicTeamRegistrationCreate = {
   team_name: string
-  captain: TournamentPublicRegistration
   teammate_player_ids: number[]
   teammate_fide_ids: string[]
   teammate_manual_entries: TournamentPublicRegistration[]

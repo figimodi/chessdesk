@@ -330,7 +330,7 @@ export function TournamentForm({ value, onChange, minimumRoundsCount = 1, onRoun
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                  className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                   aria-label="Rimuovi spareggio"
                   title="Rimuovi spareggio"
                   disabled={value.tie_breaks.length <= 1}

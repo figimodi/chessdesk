@@ -2,7 +2,7 @@ import { isAxiosError } from 'axios'
 import { LogOut, Shield } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { useAuth } from '@/auth/AuthContext'
+import { useAuth } from '@/auth/useAuth'
 import { AppShell } from '@/components/layout/AppShell'
 import { AlertCard } from '@/components/ui/alert-card'
 import { Button } from '@/components/ui/button'
@@ -60,7 +60,7 @@ export function ProfilePage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-2xl border bg-white p-4">
-              <div className="text-sm text-[var(--muted-foreground)]">Username</div>
+              <div className="text-sm text-[var(--muted-foreground)]">Nome utente</div>
               <div className="mt-1 font-medium">{user.username}</div>
             </div>
             <div className="rounded-2xl border bg-white p-4">

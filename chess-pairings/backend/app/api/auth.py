@@ -40,7 +40,7 @@ async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends
     user = await user_service.authenticate_user(db, data.username, data.password)
     if user is None:
         logger.info("Failed login attempt for username %s from %s", normalized_username, client_ip)
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+        raise HTTPException(status_code=401, detail="Credenziali non valide")
     if not user.is_active:
         logger.info("Blocked login for inactive account %s from %s", user.username, client_ip)
         raise HTTPException(status_code=403, detail="Questo account e disattivato. Contatta lo sviluppatore.")
@@ -139,5 +139,5 @@ async def change_password(
         new_password=data.new_password,
     )
     if updated_user is None:
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
+        raise HTTPException(status_code=400, detail="La password attuale non e corretta")
     return UserRead.model_validate(updated_user)

@@ -1,1 +1,0 @@
-INSERT INTO healthcheck DEFAULT VALUES;

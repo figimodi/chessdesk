@@ -12,7 +12,7 @@ Il progetto segue i pattern principali di `kasparov-webapp`:
 - sessione DB in `backend/app/core/database.py`
 - router sottili in `backend/app/api/`
 - business logic e operazioni DB in `backend/app/services/`
-- un solo `docker-compose.yml` per sviluppo locale
+- configurazione Docker Compose con file base e override `dev`/`prod`
 - frontend con `React Query`, `router/`, `pages/`, `api/customClient.ts`
 - client API pensato per convergere su generazione OpenAPI
 
@@ -81,7 +81,7 @@ Regole pratiche:
 
 ### Tooling
 
-- Docker Compose con un solo file
+- Docker Compose con file base e override per ambiente
 - Poetry-ready backend tramite `pyproject.toml`
 - OpenAPI client workflow predisposto nel frontend
 
@@ -95,11 +95,13 @@ chess-pairings/
 ├── docker-compose.yml
 ├── README.md
 ├── backend/
-│   ├── Dockerfile
+│   ├── Dockerfile.dev
+│   ├── Dockerfile.prod
 │   ├── pyproject.toml
 │   ├── requirements.txt
-│   ├── db/
+│   ├── alembic/
 │   ├── storage/
+│   ├── tests/
 │   └── app/
 │       ├── main.py
 │       ├── api/
@@ -197,31 +199,6 @@ Variabili ambiente rilevanti:
 
 Il primo admin viene bootstrapato automaticamente all'avvio del backend solo se `ADMIN_EMAIL`, `ADMIN_PASSWORD` e `ADMIN_USERNAME` sono valorizzati.
 
-### Migrazioni database
-
-Il progetto usa Alembic per gestire lo schema del database.
-
-Comandi utili:
-
-- `make migrate` esegue `alembic upgrade head` nel container backend
-- `make revision name="add team pin"` crea una nuova migration Alembic
-- `make history` mostra lo storico migration
-- `make current` mostra la revision corrente nel DB
-- all'avvio del backend viene eseguito automaticamente `upgrade head`
-
-Flusso consigliato per una modifica strutturale al database:
-
-1. aggiorna i modelli SQLAlchemy in `backend/app/models/`
-2. crea una migration con `make revision name="descrizione modifica"`
-3. implementa `upgrade()` e `downgrade()` nel file generato in `backend/alembic/versions/`
-4. applica la migration con `make migrate`
-5. aggiorna eventuali schema API e frontend che dipendono dal nuovo campo o dalla nuova tabella
-
-Regola pratica:
-
-- ogni cambiamento strutturale del DB deve passare da Alembic
-- non si aggiornano piu le tabelle con `ALTER TABLE` nello startup dell'applicazione
-
 Il login applicativo usa lo `username`, non l'email. La login form principale e' nella homepage.
 
 ### Pattern applicato
@@ -232,8 +209,6 @@ Come in `kasparov-webapp`, il backend usa:
 - `services/` per operazioni DB e logica di dominio
 - `core/database.py` per engine async e dependency injection della sessione
 - `core/config.py` per variabili ambiente
-- `alembic/` per migrazioni DB versionate
-- `app/scripts/migrate.py` come entrypoint runtime per `upgrade head`
 
 ### Moduli principali
 
@@ -359,8 +334,6 @@ make compose
 Comandi utili:
 
 - `make compose`
-- `make migrate`
-- `make revision name="add team pin"`
 - `make build-players-db`
 - `make compose ENV=prod`
 
@@ -481,8 +454,7 @@ make build-players-db
 
 ```sh
 cd backend
-python3.12 -m venv .venv
-source .venv/bin/activate
+conda activate chessdesk
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
@@ -495,20 +467,9 @@ npm install
 npm run dev
 ```
 
-## Verifiche eseguite
+## Verifiche rapide
 
-- import backend OK con Python 3.12
-- build frontend OK con `npm run build`
-
-## Limiti attuali
-
-- la generazione client OpenAPI e' predisposta ma non ancora agganciata a file generati reali
-- i test automatici backend e frontend non sono ancora presenti
-
-## Prossimi miglioramenti consigliati
-
-1. generare davvero `frontend/src/api/client/` da OpenAPI
-2. aggiungere test async backend su standings, catalogo locale giocatori e pairings
-3. aggiungere test frontend per auth, profilo e gestione tornei
-4. supportare piu' opzioni avanzate di `bbpPairings` e checklist ufficiale
-5. completare il flusso squadre con PIN e iscrizione pubblica avanzata
+- backend test: `conda run -n chessdesk pytest -q`
+- backend coverage: `conda run -n chessdesk pytest --cov=app --cov-report=term-missing -q`
+- frontend lint: `npm run lint`
+- frontend build: `npm run build`

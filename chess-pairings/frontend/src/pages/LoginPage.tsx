@@ -1,7 +1,7 @@
 import { isAxiosError } from 'axios'
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { useAuth } from '@/auth/AuthContext'
+import { useAuth } from '@/auth/useAuth'
 import { AppShell } from '@/components/layout/AppShell'
 import { AlertCard } from '@/components/ui/alert-card'
 import { Button } from '@/components/ui/button'
@@ -54,7 +54,7 @@ export function LoginPage() {
           <CardContent>
             <form className="space-y-5" onSubmit={handleSubmit}>
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="username">Nome utente</Label>
                 <Input id="username" value={username} onChange={(event) => setUsername(event.target.value)} required />
               </div>
               <div className="space-y-2">
@@ -79,5 +79,5 @@ function readErrorMessage(error: unknown) {
     const detail = error.response?.data?.detail
     if (typeof detail === 'string') return detail
   }
-  return 'Username o password non validi.'
+  return 'Nome utente o password non validi.'
 }

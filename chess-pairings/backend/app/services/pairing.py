@@ -204,7 +204,7 @@ async def update_pairing_board_order(
     if data.side not in ("white", "black"):
         raise HTTPException(status_code=400, detail="Lato non valido.")
     if data.target_pairing_id <= 0:
-        raise HTTPException(status_code=400, detail="Pairing di destinazione non valido.")
+        raise HTTPException(status_code=400, detail="Abbinamento di destinazione non valido.")
 
     round_result = await db.execute(
         select(Round)
@@ -233,7 +233,7 @@ async def update_pairing_board_order(
     current_pairing = next((item for item in match_pairings if item.id == pairing.id), None)
     target_pairing = next((item for item in match_pairings if item.id == data.target_pairing_id), None)
     if current_pairing is None or target_pairing is None:
-        raise HTTPException(status_code=404, detail="Pairing not found")
+        raise HTTPException(status_code=404, detail="Abbinamento non trovato")
     if current_pairing.id == target_pairing.id:
         return {"ok": True, "pairingId": pairing.id}
     if data.side == "white":

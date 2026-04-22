@@ -294,7 +294,7 @@ async def register_public_player(
     db: AsyncSession, tournament: Tournament, data: TournamentPublicRegistration
 ) -> TournamentPlayer:
     if tournament.is_registration_closed:
-        raise HTTPException(status_code=409, detail="Tournament registration is closed")
+        raise HTTPException(status_code=409, detail="Le iscrizioni del torneo sono chiuse")
 
     if data.fide_id:
         existing_fide_entry = next(
@@ -306,7 +306,7 @@ async def register_public_player(
             None,
         )
         if existing_fide_entry is not None:
-            raise HTTPException(status_code=409, detail="Player already registered in this tournament")
+            raise HTTPException(status_code=409, detail="Il giocatore risulta gia iscritto a questo torneo")
 
         player = await player_service.import_player_from_fide(db, data.fide_id)
     else:
@@ -320,7 +320,7 @@ async def register_public_player(
             None,
         )
         if existing_manual_entry is not None:
-            raise HTTPException(status_code=409, detail="A player with the same name is already registered in this tournament")
+            raise HTTPException(status_code=409, detail="Esiste gia un giocatore con lo stesso nome in questo torneo")
 
         player = await player_service.create_public_manual_player(
             db,
@@ -344,10 +344,6 @@ async def register_public_team(
     if any(team.name.strip().lower() == data.team_name.strip().lower() for team in tournament.teams):
         raise HTTPException(status_code=409, detail="Esiste gia una squadra con questo nome")
 
-    captain_entry = await _resolve_public_registration_entry(db, tournament, data.captain)
-    if captain_entry.team_id is not None:
-        raise HTTPException(status_code=409, detail="Il capitano risulta gia assegnato a una squadra")
-
     join_pin = _generate_team_join_pin(tournament)
     team = Team(tournament_id=tournament_id, name=data.team_name.strip(), join_pin=join_pin)
     db.add(team)
@@ -359,18 +355,16 @@ async def register_public_team(
     if created_team is None:
         raise HTTPException(status_code=500, detail="Non sono riuscito a creare la squadra")
 
-    created_team = await team_service.assign_member(
-        db,
-        refreshed_tournament,
-        created_team,
-        TeamMemberAssign(player_id=captain_entry.player_id),
-    )
-
-    processed_player_ids = {captain_entry.player_id}
+    processed_player_ids: set[int] = set()
 
     for player_id in data.teammate_player_ids:
         if player_id in processed_player_ids:
             continue
+        existing_entry = next((entry for entry in refreshed_tournament.players if entry.player_id == player_id), None)
+        if existing_entry is None:
+            raise HTTPException(status_code=404, detail="Giocatore non trovato nel torneo")
+        if existing_entry.team_id is not None:
+            raise HTTPException(status_code=409, detail="Uno dei giocatori selezionati appartiene gia a una squadra")
         db.expire_all()
         refreshed_tournament = await _get_tournament_unscoped(db, tournament_id)
         created_team_model = next(team for team in refreshed_tournament.teams if team.id == created_team.id)
@@ -472,7 +466,7 @@ def _ensure_public_team_registration_allowed(tournament: Tournament) -> None:
     if tournament.type.value not in ("team", "quadriglia"):
         raise HTTPException(status_code=409, detail="Questa funzionalita e disponibile solo per i tornei a squadre")
     if tournament.is_registration_closed:
-        raise HTTPException(status_code=409, detail="Tournament registration is closed")
+        raise HTTPException(status_code=409, detail="Le iscrizioni del torneo sono chiuse")
 
 
 async def _resolve_public_registration_entry(
@@ -537,7 +531,7 @@ async def remove_player(
 
     entry = next((item for item in tournament.players if item.player_id == player_id), None)
     if entry is None:
-        raise HTTPException(status_code=404, detail="Player not found in tournament")
+        raise HTTPException(status_code=404, detail="Giocatore non trovato nel torneo")
 
     await db.delete(entry)
     await db.commit()
@@ -632,7 +626,7 @@ async def update_player_availability(
 ) -> TournamentPlayer:
     entry = next((item for item in tournament.players if item.player_id == player_id), None)
     if entry is None:
-        raise HTTPException(status_code=404, detail="Player not found in tournament")
+        raise HTTPException(status_code=404, detail="Giocatore non trovato nel torneo")
 
     availability = next(
         (item for item in entry.availabilities if item.round_number == data.round_number),
@@ -665,7 +659,7 @@ async def update_player_status(
 ) -> TournamentPlayer:
     entry = next((item for item in tournament.players if item.player_id == player_id), None)
     if entry is None:
-        raise HTTPException(status_code=404, detail="Player not found in tournament")
+        raise HTTPException(status_code=404, detail="Giocatore non trovato nel torneo")
 
     entry.is_active = data.is_active
     if not data.is_active:

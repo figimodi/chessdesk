@@ -15,5 +15,5 @@ class FideService:
     ) -> FidePlayerSearchResult:
         player = await catalog.get_catalog_player_by_fide_id(db, fide_id.strip())
         if player is None:
-            raise ValueError(f"Player with ID {fide_id} not found in catalog")
+            raise ValueError(f"Giocatore con ID {fide_id} non trovato nel catalogo")
         return catalog._to_schema(player)

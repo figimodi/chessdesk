@@ -40,7 +40,7 @@ async def get_tournament(
 ):
     tournament = await tournament_service._get_tournament_unscoped(db, tournament_id)
     if tournament is None or not tournament_service.can_view_tournament(tournament, current_user):
-        raise HTTPException(status_code=404, detail="Tournament not found")
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
     return await tournament_service.serialize_tournament_detail(db, tournament, current_user)
 
 
@@ -82,7 +82,7 @@ async def register_to_tournament(
 ):
     tournament = await tournament_service._get_tournament_unscoped(db, tournament_id)
     if tournament is None or not tournament_service.can_view_tournament(tournament, None):
-        raise HTTPException(status_code=404, detail="Tournament not found")
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
     entry = await tournament_service.register_public_player(db, tournament, data)
     return tournament_service.serialize_tournament_player(entry)
 
@@ -98,7 +98,7 @@ async def create_team_registration(
 ):
     tournament = await tournament_service._get_tournament_unscoped(db, tournament_id)
     if tournament is None or not tournament_service.can_view_tournament(tournament, None):
-        raise HTTPException(status_code=404, detail="Tournament not found")
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
     return await tournament_service.register_public_team(db, tournament, data)
 
 
@@ -113,7 +113,7 @@ async def join_team_registration(
 ):
     tournament = await tournament_service._get_tournament_unscoped(db, tournament_id)
     if tournament is None or not tournament_service.can_view_tournament(tournament, None):
-        raise HTTPException(status_code=404, detail="Tournament not found")
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
     entry = await tournament_service.join_public_team(db, tournament, data)
     return tournament_service.serialize_tournament_player(entry)
 

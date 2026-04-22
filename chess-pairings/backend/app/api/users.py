@@ -24,10 +24,10 @@ async def create_user(
 ):
     existing = await user_service.get_user_by_email(db, data.email)
     if existing is not None:
-        raise HTTPException(status_code=409, detail="A user with this email already exists")
+        raise HTTPException(status_code=409, detail="Esiste gia un utente con questa email")
     existing_username = await user_service.get_user_by_username(db, data.username)
     if existing_username is not None:
-        raise HTTPException(status_code=409, detail="A user with this username already exists")
+        raise HTTPException(status_code=409, detail="Esiste gia un utente con questo username")
     user = await user_service.create_user(
         db,
         email=data.email,
@@ -49,13 +49,13 @@ async def update_user(
 ):
     user = await user_service.get_user_by_id(db, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Utente non trovato")
     if data.username is not None:
         existing_username = await user_service.get_user_by_username(db, data.username)
         if existing_username is not None and existing_username.id != user.id:
-            raise HTTPException(status_code=409, detail="A user with this username already exists")
+            raise HTTPException(status_code=409, detail="Esiste gia un utente con questo username")
     if user.role == UserRole.admin and data.is_active is False:
-        raise HTTPException(status_code=409, detail="The admin account cannot be deactivated")
+        raise HTTPException(status_code=409, detail="L'account admin non puo essere disattivato")
     updated = await user_service.update_user(
         db,
         user,
@@ -75,8 +75,8 @@ async def delete_user(
 ):
     user = await user_service.get_user_by_id(db, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Utente non trovato")
     if user.id == current_admin.id:
-        raise HTTPException(status_code=409, detail="You cannot delete the account you are currently using")
+        raise HTTPException(status_code=409, detail="Non puoi eliminare l'account attualmente in uso")
     await user_service.delete_user(db, user, reassigned_owner_id=current_admin.id)
     return {"ok": True}

@@ -12,7 +12,7 @@ export function NotFoundPage() {
         </CardHeader>
         <CardContent>
           <Button asChild>
-            <Link to="/">Torna alla dashboard</Link>
+            <Link to="/">Torna alla pagina principale</Link>
           </Button>
         </CardContent>
       </Card>

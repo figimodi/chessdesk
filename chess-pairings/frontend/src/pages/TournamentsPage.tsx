@@ -3,11 +3,11 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { ArrowRight, Plus, Search, SquarePen, Trash2 } from "lucide-react";
 import { api } from "@/api/client";
 import { useTournaments } from "@/api/hooks/tournaments";
-import { useAuth } from "@/auth/AuthContext";
+import { useAuth } from "@/auth/useAuth";
 import { AppShell } from "@/components/layout/AppShell";
 import { TournamentHeroCard } from "@/components/tournaments/TournamentHeroCard";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TournamentRegistrationDialog } from "@/components/tournaments/TournamentRegistrationDialog";
 
@@ -76,7 +76,7 @@ export function TournamentsPage() {
                       <>
                         <Button
                           asChild
-                          className="border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                          className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                           onClick={(event) => event.stopPropagation()}
                           variant="outline"
                           aria-label="Modifica torneo"
@@ -92,7 +92,7 @@ export function TournamentsPage() {
                             void api.deleteTournament(String(tournament.id)).then(() => navigate(0));
                           }}
                           variant="outline"
-                          className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                          className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                           aria-label="Elimina torneo"
                           title="Elimina torneo"
                         >

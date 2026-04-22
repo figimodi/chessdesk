@@ -302,7 +302,7 @@ function TeamRosterCard({
                   title="Rimuovi giocatore"
                   variant="outline"
                   size="sm"
-                  className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                  className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                   onClick={() => onRemoveMember(team.id, member.player_id)}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -413,7 +413,7 @@ function TeamDialog({
                     aria-label="Elimina squadra"
                     title="Elimina squadra"
                     variant="outline"
-                    className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                    className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                     onClick={() => onDeleteTeam(team.id)}
                   >
                     <Trash2 className="h-4 w-4" />

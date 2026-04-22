@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { useUsers, useCreateUser, useDeleteUser, useUpdateUser } from '@/api/hooks/users'
 import type { User } from '@/api/types'
-import { useAuth } from '@/auth/AuthContext'
+import { useAuth } from '@/auth/useAuth'
 import { AppShell } from '@/components/layout/AppShell'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -54,7 +54,7 @@ export function UsersPage() {
         <Card>
           <CardHeader>
             <CardTitle>Utenti</CardTitle>
-            <CardDescription>Gestisci gli account che possono accedere alla webapp.</CardDescription>
+            <CardDescription>Gestisci gli account che possono accedere all'applicazione.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {isLoading ? <div className="text-sm text-[var(--muted-foreground)]">Caricamento utenti...</div> : null}
@@ -78,7 +78,7 @@ export function UsersPage() {
           <CardContent>
             <form className="space-y-4" onSubmit={handleCreateUser}>
               <div className="space-y-2">
-                <Label htmlFor="new-username">Username</Label>
+                <Label htmlFor="new-username">Nome utente</Label>
                 <Input id="new-username" value={newUsername} onChange={(event) => setNewUsername(event.target.value)} required />
               </div>
               <div className="space-y-2">
@@ -132,7 +132,9 @@ function UserRow({
         is_active: user.role === 'admin' ? undefined : isActive,
       })
       setPassword('')
-    } catch {}
+    } catch {
+      return
+    }
   }
 
   return (
@@ -149,7 +151,7 @@ function UserRow({
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-2 md:col-span-1">
-          <Label>Username</Label>
+          <Label>Nome utente</Label>
           <Input value={username} onChange={(event) => setUsername(event.target.value)} />
         </div>
         <div className="space-y-2 md:col-span-1">
@@ -170,7 +172,7 @@ function UserRow({
               onClick={() => onRequestDelete(user)}
               type="button"
               variant="outline"
-              className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+              className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
               aria-label="Elimina account"
               title="Elimina account"
             >

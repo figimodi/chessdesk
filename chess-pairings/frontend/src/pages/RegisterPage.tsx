@@ -2,7 +2,7 @@ import { isAxiosError } from 'axios'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { api } from '@/api/client'
-import { useAuth } from '@/auth/AuthContext'
+import { useAuth } from '@/auth/useAuth'
 import { AppShell } from '@/components/layout/AppShell'
 import { AlertCard } from '@/components/ui/alert-card'
 import { Button } from '@/components/ui/button'
@@ -101,7 +101,7 @@ export function RegisterPage() {
                 <Input id="register-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="register-username">Username</Label>
+                <Label htmlFor="register-username">Nome utente</Label>
                 <Input id="register-username" value={username} onChange={(event) => setUsername(event.target.value)} required />
               </div>
               <div className="space-y-2">
@@ -163,7 +163,7 @@ function readErrorMessage(error: unknown, fallback: string) {
 
 function formatFieldLabel(field: string) {
   if (field === 'password') return 'Password'
-  if (field === 'username') return 'Username'
+  if (field === 'username') return 'Nome utente'
   if (field === 'email') return 'Email'
   return field
 }

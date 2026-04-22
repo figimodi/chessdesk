@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import type { PropsWithChildren } from 'react'
 import { CircleUserRound, Trophy } from 'lucide-react'
-import { useAuth } from '@/auth/AuthContext'
+import { useAuth } from '@/auth/useAuth'
 import { Button } from '@/components/ui/button'
 
 export function AppShell({ children }: PropsWithChildren) {
@@ -36,7 +36,7 @@ export function AppShell({ children }: PropsWithChildren) {
               </Button>
             ) : showLoginButton ? (
               <Button asChild size="sm" type="button" variant="outline">
-                <Link to="/login">Login</Link>
+                <Link to="/login">Accedi</Link>
               </Button>
             ) : null}
             {showRegisterButton ? (

@@ -1,7 +1,7 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { isAxiosError } from "axios";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import { CalendarDays, ChartColumn, Clock3, Hash, MapPin, Paperclip, SquarePen, Trash2, User, Users, Zap, Turtle } from "lucide-react";
+import { SquarePen, Trash2 } from "lucide-react";
 import { api } from "@/api/client";
 import { useFideSearch, useImportPlayerFromFide } from "@/api/hooks/players";
 import {
@@ -23,14 +23,12 @@ import {
   useUpdateTeamStatus,
   useUpdatePlayerAvailability,
   useUpdatePlayerStatus,
-  useUploadBulletin,
 } from "@/api/hooks/tournaments";
 import type { FidePlayer, PairingResult, TournamentPlayer } from "@/api/types";
 import { AppShell } from "@/components/layout/AppShell";
 import { RoundsPanel } from "@/components/pairings/RoundsPanel";
 import { TeamsPanel } from "@/components/teams/TeamsPanel";
 import { AlertCard } from "@/components/ui/alert-card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -38,7 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { queryClient } from "@/api/queryClient";
 import { getFederationFlagUrl } from "@/lib/federationFlags";
-import { useAuth } from "@/auth/AuthContext";
+import { useAuth } from "@/auth/useAuth";
 import { TournamentHeroCard } from "@/components/tournaments/TournamentHeroCard";
 import { TournamentRegistrationDialog } from "@/components/tournaments/TournamentRegistrationDialog";
 
@@ -65,7 +63,6 @@ export function TournamentDetailPage() {
   const generateMutation = useGeneratePairings(tournamentId);
   const deleteRoundMutation = useDeleteLatestRound(tournamentId);
   const updatePairingBoardOrderMutation = useUpdatePairingBoardOrder(tournamentId);
-  const uploadMutation = useUploadBulletin(tournamentId);
   const [catalogQuery, setCatalogQuery] = useState("");
   const [debouncedCatalogQuery, setDebouncedCatalogQuery] = useState("");
   const [catalogPage, setCatalogPage] = useState(1);
@@ -155,7 +152,6 @@ export function TournamentDetailPage() {
   const generatedRounds = tournament?.rounds.filter((round) => round.pairings.length > 0) ?? [];
   const nextRoundNumber = generatedRounds.length + 1;
   const isTeamLikeTournament = tournament?.type === "team" || tournament?.type === "quadriglia";
-  const participantLabel = isTeamLikeTournament ? "Squadre" : "Giocatori";
 
   const catalogRatingLabel =
     tournament?.time_control_category === "blitz" ? "ELO Blitz" : tournament?.time_control_category === "rapid" ? "ELO Rapid" : "ELO Standard";
@@ -312,7 +308,7 @@ export function TournamentDetailPage() {
       <section className="mb-8">
         <TournamentHeroCard
           bulletinUrl={tournament.bulletin_url}
-          datesLabel={formatTournamentDates(tournament.start_date, tournament.end_date, tournament.rounds)}
+          datesLabel={formatTournamentDates(tournament.start_date, tournament.end_date)}
           description={tournament.description}
           isEloRated={tournament.is_elo_rated}
           isOwner={user?.id === tournament.owner_id}
@@ -328,7 +324,7 @@ export function TournamentDetailPage() {
                 <Button
                   variant="outline"
                   asChild
-                  className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                   aria-label="Modifica torneo"
                   title="Modifica torneo"
                 >
@@ -338,7 +334,7 @@ export function TournamentDetailPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                  className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                   aria-label="Elimina torneo"
                   title="Elimina torneo"
                   onClick={() => {
@@ -486,7 +482,7 @@ export function TournamentDetailPage() {
                       <TableHead>FED</TableHead>
                       <TableHead>{catalogRatingLabel}</TableHead>
                       <TableHead>Anno nascita</TableHead>
-                      {isTeamLikeTournament ? <TableHead>Team</TableHead> : null}
+                      {isTeamLikeTournament ? <TableHead>Squadra</TableHead> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -526,7 +522,7 @@ export function TournamentDetailPage() {
                   ) : null}
                   <Button
                     variant="outline"
-                    className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                    className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                     aria-label="Elimina partecipante"
                     title="Elimina partecipante"
                     onClick={() => {
@@ -766,9 +762,7 @@ export function TournamentDetailPage() {
             players={tournament.players}
             tournamentType={tournament.type}
             category={tournament.time_control_category}
-            totalRounds={tournament.rounds_count}
             nextRoundNumber={nextRoundNumber}
-            registrationClosed={tournament.is_registration_closed}
             canGenerateNextRound={!!canGenerateNextRound}
             onGenerateRound={handleGenerateRound}
             showConcludeTournament={showConcludeTournament}
@@ -800,49 +794,7 @@ export function TournamentDetailPage() {
   );
 }
 
-function InfoChip({ icon, label, href }: { icon: ReactNode; label: string; href?: string }) {
-  const content = (
-    <>
-      <span className="text-[var(--muted-foreground)]">{icon}</span>
-      <span className="text-[var(--muted-foreground)]">{label}</span>
-    </>
-  );
-
-  if (href) {
-    return (
-      <a
-        className="inline-flex items-center gap-2 rounded-full border bg-white px-2.5 py-1 text-xs hover:bg-[var(--muted)]"
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-      >
-        {content}
-      </a>
-    );
-  }
-
-  return <div className="inline-flex items-center gap-2 rounded-full border bg-white px-2.5 py-1 text-xs">{content}</div>;
-}
-
-function InlineDetail({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex min-w-0 items-start gap-3">
-      <div className="rounded-2xl border bg-white p-2.5 text-slate-500 shadow-sm">{icon}</div>
-      <div className="min-w-0">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</div>
-        <div className="mt-1 text-base font-semibold leading-tight text-slate-900">{value}</div>
-      </div>
-    </div>
-  );
-}
-
-function timeControlIcon(category: string) {
-  if (category === "blitz") return <Zap className="h-4 w-4" />;
-  if (category === "rapid") return <Clock3 className="h-4 w-4" />;
-  return <Turtle className="h-4 w-4" />;
-}
-
-function formatTournamentDates(startDate: string, endDate: string, rounds?: { scheduled_at?: string | null }[]) {
+function formatTournamentDates(startDate: string, endDate: string) {
   if (startDate === endDate) {
     return formatMonthDay(startDate);
   }

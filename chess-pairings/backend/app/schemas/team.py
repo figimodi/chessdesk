@@ -77,16 +77,21 @@ class PublicRegistrantIdentity(ORMModel):
         has_fide = bool(self.fide_id)
         has_manual_identity = bool(self.first_name and self.last_name)
         if has_fide == has_manual_identity:
-            raise ValueError("Provide either a fide_id or first_name and last_name")
+            raise ValueError("Inserisci fide_id oppure nome e cognome")
         return self
 
 
 class PublicTeamRegistrationCreate(ORMModel):
     team_name: str = Field(min_length=2, max_length=120)
-    captain: PublicRegistrantIdentity
     teammate_player_ids: list[int] = []
     teammate_fide_ids: list[str] = []
     teammate_manual_entries: list[PublicRegistrantIdentity] = []
+
+    @model_validator(mode="after")
+    def validate_has_at_least_one_member(self):
+        if not self.teammate_player_ids and not self.teammate_fide_ids and not self.teammate_manual_entries:
+            raise ValueError("La squadra deve contenere almeno un membro")
+        return self
 
 
 class PublicTeamRegistrationJoin(ORMModel):

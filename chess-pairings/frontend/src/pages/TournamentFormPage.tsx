@@ -6,11 +6,10 @@ import { useCreateTournament, useTournament, useUpdateTournament } from "@/api/h
 import { useUploadBulletin } from "@/api/hooks/tournaments";
 import { useUsers } from "@/api/hooks/users";
 import type { TournamentCreate } from "@/api/types";
-import { useAuth } from "@/auth/AuthContext";
+import { useAuth } from "@/auth/useAuth";
 import { AppShell } from "@/components/layout/AppShell";
 import { TournamentForm } from "@/components/tournaments/TournamentForm";
 import { AlertCard } from "@/components/ui/alert-card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 

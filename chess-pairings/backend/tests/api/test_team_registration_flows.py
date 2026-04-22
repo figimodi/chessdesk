@@ -49,17 +49,19 @@ async def _create_admin_and_tournament(client, session_factory, *, max_players_p
 
 
 @pytest.mark.asyncio
-async def test_create_public_team_with_manual_captain_and_teammate(client, session_factory):
+async def test_create_public_team_with_manual_teammates(client, session_factory):
     tournament_id = await _create_admin_and_tournament(client, session_factory)
 
     response = await client.post(
         f"/api/v1/tournaments/{tournament_id}/team-registration/create",
         json={
             "team_name": "Leoni",
-            "captain": {"first_name": "Mario", "last_name": "Rossi"},
             "teammate_player_ids": [],
             "teammate_fide_ids": [],
-            "teammate_manual_entries": [{"first_name": "Luigi", "last_name": "Bianchi"}],
+            "teammate_manual_entries": [
+                {"first_name": "Mario", "last_name": "Rossi"},
+                {"first_name": "Luigi", "last_name": "Bianchi"},
+            ],
         },
     )
 
@@ -83,10 +85,9 @@ async def test_join_public_team_with_valid_pin(client, session_factory):
         f"/api/v1/tournaments/{tournament_id}/team-registration/create",
         json={
             "team_name": "Falchi",
-            "captain": {"first_name": "Anna", "last_name": "Verdi"},
             "teammate_player_ids": [],
             "teammate_fide_ids": [],
-            "teammate_manual_entries": [],
+            "teammate_manual_entries": [{"first_name": "Anna", "last_name": "Verdi"}],
         },
     )
     team_payload = create_response.json()
@@ -111,10 +112,9 @@ async def test_join_public_team_rejects_invalid_pin(client, session_factory):
         f"/api/v1/tournaments/{tournament_id}/team-registration/create",
         json={
             "team_name": "Lupi",
-            "captain": {"first_name": "Piero", "last_name": "Blu"},
             "teammate_player_ids": [],
             "teammate_fide_ids": [],
-            "teammate_manual_entries": [],
+            "teammate_manual_entries": [{"first_name": "Piero", "last_name": "Blu"}],
         },
     )
     team_payload = create_response.json()
@@ -137,10 +137,9 @@ async def test_create_public_team_rejects_duplicate_team_name(client, session_fa
     tournament_id = await _create_admin_and_tournament(client, session_factory)
     payload = {
         "team_name": "Aquilotti",
-        "captain": {"first_name": "Marco", "last_name": "Rossi"},
         "teammate_player_ids": [],
         "teammate_fide_ids": [],
-        "teammate_manual_entries": [],
+        "teammate_manual_entries": [{"first_name": "Marco", "last_name": "Rossi"}],
     }
 
     first_response = await client.post(f"/api/v1/tournaments/{tournament_id}/team-registration/create", json=payload)
@@ -158,10 +157,9 @@ async def test_join_public_team_rejects_player_already_in_team(client, session_f
         f"/api/v1/tournaments/{tournament_id}/team-registration/create",
         json={
             "team_name": "Draghi",
-            "captain": {"first_name": "Giulia", "last_name": "Viola"},
             "teammate_player_ids": [],
             "teammate_fide_ids": [],
-            "teammate_manual_entries": [],
+            "teammate_manual_entries": [{"first_name": "Giulia", "last_name": "Viola"}],
         },
     )
     team_payload = create_response.json()
@@ -187,12 +185,46 @@ async def test_create_public_team_enforces_max_players_per_team(client, session_
         f"/api/v1/tournaments/{tournament_id}/team-registration/create",
         json={
             "team_name": "Stelle",
-            "captain": {"first_name": "Luca", "last_name": "Gialli"},
+            "teammate_player_ids": [],
+            "teammate_fide_ids": [],
+            "teammate_manual_entries": [
+                {"first_name": "Luca", "last_name": "Gialli"},
+                {"first_name": "Marta", "last_name": "Bianchi"},
+            ],
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["message"] == "La squadra ha raggiunto il numero massimo di giocatori."
+
+
+@pytest.mark.asyncio
+async def test_create_public_team_ignores_legacy_captain_payload(client, session_factory):
+    tournament_id = await _create_admin_and_tournament(client, session_factory)
+
+    first_team_response = await client.post(
+        f"/api/v1/tournaments/{tournament_id}/team-registration/create",
+        json={
+            "team_name": "Alfieri",
+            "teammate_player_ids": [],
+            "teammate_fide_ids": [],
+            "teammate_manual_entries": [{"first_name": "Giulia", "last_name": "Viola"}],
+        },
+    )
+    assert first_team_response.status_code == 200
+
+    second_team_response = await client.post(
+        f"/api/v1/tournaments/{tournament_id}/team-registration/create",
+        json={
+            "team_name": "Cavalli",
+            "captain": {"first_name": "Giulia", "last_name": "Viola"},
             "teammate_player_ids": [],
             "teammate_fide_ids": [],
             "teammate_manual_entries": [{"first_name": "Marta", "last_name": "Bianchi"}],
         },
     )
 
-    assert response.status_code == 409
-    assert response.json()["message"] == "La squadra ha raggiunto il numero massimo di giocatori."
+    assert second_team_response.status_code == 200
+    payload = second_team_response.json()
+    assert payload["team_name"] == "Cavalli"
+    assert payload["members_count"] == 1

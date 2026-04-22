@@ -50,7 +50,7 @@ export function TournamentHeroCard({
           <div className="flex flex-wrap items-center gap-3">
             <CardTitle className="text-3xl">{name}</CardTitle>
             {isPrivate ? <Badge>Privato</Badge> : null}
-            {isOwner ? <Badge>Owner</Badge> : null}
+            {isOwner ? <Badge>Proprietario</Badge> : null}
           </div>
           <div className="flex flex-wrap gap-2 lg:justify-end">
             <InfoChip icon={<ChartColumn className="h-4 w-4" />} label={isEloRated ? "Variazione Elo" : "No variazione Elo"} />
@@ -68,7 +68,7 @@ export function TournamentHeroCard({
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="flex flex-wrap items-start gap-6">
             <InlineDetail icon={<MapPin className="h-4 w-4" />} label="Luogo" value={venueLabel} />
-            <InlineDetail icon={<CalendarDays className="h-4 w-4" />} label="Date" value={datesLabel} />
+            <InlineDetail icon={<CalendarDays className="h-4 w-4" />} label="Data" value={datesLabel} />
             {bulletinUrl ? <InlineDetail icon={<Paperclip className="h-4 w-4" />} label="Bando" value="Apri bando" href={bulletinUrl} /> : null}
           </div>
           <div className="flex flex-wrap gap-2 md:justify-end">
@@ -76,11 +76,11 @@ export function TournamentHeroCard({
               <Button
                 disabled={registerDisabled}
                 onClick={(event) => {
-                  event.stopPropagation()
-                  onRegister()
+                  event.stopPropagation();
+                  onRegister();
                 }}
                 variant="outline"
-                className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
                 aria-label={registerButtonLabel ?? "Iscriviti"}
                 title={registerButtonLabel ?? "Iscriviti"}
               >
