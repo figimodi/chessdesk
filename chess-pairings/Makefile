@@ -1,4 +1,4 @@
-.PHONY: help compose down logs ps restart rebuild build-players-db update-swagger migrate revision history current
+.PHONY: help compose down logs ps restart rebuild build-players-db test update-swagger migrate revision history current
 
 # Colors
 GREEN  := \033[0;32m
@@ -48,6 +48,7 @@ help:
 	@echo "  $(GREEN)logs$(NC)            Follow live log output from all running containers"
 	@echo "  $(GREEN)ps$(NC)              List containers and their current status"
 	@echo "  $(GREEN)build-players-db$(NC) Rebuild catalog_player table from backend/data/players_list_foa.txt"
+	@echo "  $(GREEN)test$(NC)            Run backend test suite in conda env chessdesk"
 	@echo "  $(GREEN)migrate$(NC)         Run Alembic migrations on the backend container"
 	@echo "  $(GREEN)revision$(NC)        Create a new Alembic migration (use name=\"...\")"
 	@echo "  $(GREEN)history$(NC)         Show Alembic migration history"
@@ -62,6 +63,7 @@ help:
 	@echo "  make restart"
 	@echo "  make rebuild"
 	@echo "  make build-players-db"
+	@echo "  make test"
 	@echo "  make logs"
 	@echo "  make down"
 	@echo ""
@@ -102,6 +104,10 @@ build-players-db:
 	$(call check_env)
 	@echo "$(GREEN)Rebuilding catalog_player table from TXT file...$(NC)"
 	$(COMPOSE_CMD) run --rm app python -m app.scripts.build_players_db
+
+test:
+	@echo "$(GREEN)Running backend tests in chessdesk env...$(NC)"
+	conda run -n chessdesk pytest -q backend/tests
 
 migrate:
 	$(call check_env)
