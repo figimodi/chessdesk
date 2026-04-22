@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import { Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ReorderList } from "@/components/ui/reorder-list";
 import { Item, ItemActions, ItemContent } from "@/components/ui/item";
@@ -327,8 +328,11 @@ export function TournamentForm({ value, onChange, minimumRoundsCount = 1, onRoun
               <ItemActions>
                 <Button
                   type="button"
-                  variant="destructive"
+                  variant="outline"
                   size="sm"
+                  className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                  aria-label="Rimuovi spareggio"
+                  title="Rimuovi spareggio"
                   disabled={value.tie_breaks.length <= 1}
                   onClick={() => {
                     if (value.tie_breaks.length <= 1) return;
@@ -338,7 +342,7 @@ export function TournamentForm({ value, onChange, minimumRoundsCount = 1, onRoun
                     });
                   }}
                 >
-                  Rimuovi
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </ItemActions>
             </Item>

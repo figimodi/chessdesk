@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Trash2 } from "lucide-react";
 import type { Team, TournamentPlayer } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,8 @@ type Props = {
   roundsCount: number;
   boardsPerMatch: number;
   category: string;
+  registrationClosed: boolean;
+  allowOrderEditWhenClosed: boolean;
   onCreateTeam: (name: string) => void;
   onDeleteTeam: (teamId: number) => void;
   onAssignMember: (teamId: number, playerId: number) => void;
@@ -32,6 +35,8 @@ export function TeamsPanel({
   roundsCount,
   boardsPerMatch,
   category,
+  registrationClosed,
+  allowOrderEditWhenClosed,
   onCreateTeam,
   onDeleteTeam,
   onAssignMember,
@@ -56,6 +61,8 @@ export function TeamsPanel({
   const safePage = Math.min(unassignedPage, totalPages);
   const paginatedUnassignedPlayers = unassignedPlayers.slice((safePage - 1) * pageSize, safePage * pageSize);
   const selectedTeam = selectedTeamId == null ? null : (teams.find((team) => team.id === selectedTeamId) ?? null);
+  const canEditComposition = canManage && !registrationClosed;
+  const canReorderMembers = canManage && (!registrationClosed || allowOrderEditWhenClosed);
 
   useEffect(() => {
     setUnassignedPage((current) => Math.min(current, totalPages));
@@ -66,6 +73,7 @@ export function TeamsPanel({
       {selectedTeam ? (
         <TeamDialog
           canManage={canManage}
+          canEditComposition={canEditComposition}
           key={selectedTeam.id}
           team={selectedTeam}
           roundsCount={roundsCount}
@@ -83,7 +91,7 @@ export function TeamsPanel({
           <CardTitle>Nuova squadra</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          {canManage ? (
+          {canEditComposition ? (
             <>
               <Input className="max-w-sm" placeholder="Nome squadra" value={teamName} onChange={(event) => setTeamName(event.target.value)} />
               <Button
@@ -98,7 +106,11 @@ export function TeamsPanel({
               </Button>
             </>
           ) : (
-            <div className="text-sm text-[var(--muted-foreground)]">Solo i proprietari del torneo possono modificare le squadre.</div>
+            <div className="text-sm text-[var(--muted-foreground)]">
+              {canManage
+                ? "Iscrizioni chiuse: puoi solo riordinare l'ordine interno se il torneo e a formazione libera."
+                : "Solo i proprietari del torneo possono modificare le squadre."}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -109,7 +121,8 @@ export function TeamsPanel({
           {sortedTeams.map((team) => (
             <TeamRosterCard
               key={team.id}
-              canManage={canManage}
+              canEditComposition={canEditComposition}
+              canReorderMembers={canReorderMembers}
               team={team}
               category={category}
               dragPayload={dragPayload}
@@ -130,11 +143,11 @@ export function TeamsPanel({
         <Card
           className="self-start xl:sticky xl:top-4"
           onDragOver={(event) => {
-            if (!canManage || !dragPayload) return;
+            if (!canEditComposition || !dragPayload) return;
             event.preventDefault();
           }}
           onDrop={() => {
-            if (!canManage || !dragPayload || dragPayload.kind !== "team-member") return;
+            if (!canEditComposition || !dragPayload || dragPayload.kind !== "team-member") return;
             onRemoveMember(dragPayload.fromTeamId, dragPayload.playerId);
             setDragPayload(null);
           }}
@@ -152,7 +165,7 @@ export function TeamsPanel({
                 federation={player.federation}
                 rating={getPlayerRating(player, category)}
                 birthYear={player.birth_year}
-                draggable={canManage}
+                draggable={canEditComposition}
                 onDragStart={() => setDragPayload({ kind: "unassigned", playerId: player.player_id })}
                 onDragEnd={() => setDragPayload(null)}
               />
@@ -181,7 +194,8 @@ export function TeamsPanel({
 }
 
 function TeamRosterCard({
-  canManage,
+  canEditComposition,
+  canReorderMembers,
   team,
   category,
   dragPayload,
@@ -191,7 +205,8 @@ function TeamRosterCard({
   onRemoveMember,
   setDragPayload,
 }: {
-  canManage: boolean;
+  canEditComposition: boolean;
+  canReorderMembers: boolean;
   team: Team;
   category: string;
   dragPayload: DragPayload | null;
@@ -206,14 +221,14 @@ function TeamRosterCard({
 
   return (
     <Card
-      className={canManage ? "cursor-pointer" : "cursor-default"}
+      className={canEditComposition ? "cursor-pointer" : "cursor-default"}
       onClick={onOpen}
       onDragOver={(event) => {
-        if (!canManage || !dragPayload) return;
+        if (!canEditComposition || !dragPayload) return;
         event.preventDefault();
       }}
       onDrop={() => {
-        if (!canManage || !dragPayload) return;
+        if (!canEditComposition || !dragPayload) return;
         if (dragPayload.kind === "team-member" && dragPayload.fromTeamId === team.id) return;
         onAssignMember(team.id, dragPayload.playerId);
         setDragPayload(null);
@@ -235,15 +250,15 @@ function TeamRosterCard({
           <Item
             key={member.player_id}
             className={dragPayload?.playerId === member.player_id ? "opacity-60" : ""}
-            draggable={canManage}
+            draggable={canReorderMembers || canEditComposition}
             onDragStart={() => setDragPayload({ kind: "team-member", playerId: member.player_id, fromTeamId: team.id })}
             onDragEnd={() => setDragPayload(null)}
             onDragOver={(event) => {
-              if (!canManage || !dragPayload) return;
+              if (!canReorderMembers || !dragPayload) return;
               event.preventDefault();
             }}
             onDrop={() => {
-              if (!canManage || !dragPayload) return;
+              if (!canReorderMembers || !dragPayload) return;
 
               if (dragPayload.kind === "team-member" && dragPayload.fromTeamId === team.id) {
                 if (dragPayload.playerId === member.player_id) return;
@@ -261,6 +276,7 @@ function TeamRosterCard({
                 return;
               }
 
+              if (!canEditComposition) return;
               onAssignMember(team.id, dragPayload.playerId);
               setDragPayload(null);
             }}
@@ -280,9 +296,16 @@ function TeamRosterCard({
               />
             </ItemContent>
             <ItemActions>
-              {canManage ? (
-                <Button variant="destructive" size="sm" onClick={() => onRemoveMember(team.id, member.player_id)}>
-                  Rimuovi
+              {canEditComposition ? (
+                <Button
+                  aria-label="Rimuovi giocatore"
+                  title="Rimuovi giocatore"
+                  variant="outline"
+                  size="sm"
+                  className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                  onClick={() => onRemoveMember(team.id, member.player_id)}
+                >
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               ) : null}
             </ItemActions>
@@ -348,6 +371,7 @@ function DraggablePlayerRow({
 
 function TeamDialog({
   canManage,
+  canEditComposition,
   team,
   roundsCount,
   boardsPerMatch,
@@ -358,6 +382,7 @@ function TeamDialog({
   onToggleTeamLineup,
 }: {
   canManage: boolean;
+  canEditComposition: boolean;
   team: Team;
   roundsCount: number;
   boardsPerMatch: number;
@@ -383,9 +408,17 @@ function TeamDialog({
                 <Button variant="destructive" onClick={() => onToggleTeamStatus(team.id, false)} disabled={!team.is_active}>
                   Ritira squadra
                 </Button>
-                <Button variant="destructive" onClick={() => onDeleteTeam(team.id)}>
-                  Elimina squadra
-                </Button>
+                {canEditComposition ? (
+                  <Button
+                    aria-label="Elimina squadra"
+                    title="Elimina squadra"
+                    variant="outline"
+                    className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                    onClick={() => onDeleteTeam(team.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
               </div>
             ) : null}
           </div>

@@ -175,7 +175,6 @@ function TeamTournamentRegistrationContent({ onClose, tournament }: { onClose: (
   const [feedback, setFeedback] = useState<string | null>(null);
   const [createdTeam, setCreatedTeam] = useState<PublicTeamRegistrationCreateResponse | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [captainMemberId, setCaptainMemberId] = useState<string | null>(null);
   const [teammates, setTeammates] = useState<DraftTeammate[]>([]);
 
   const createMutation = useCreatePublicTeamRegistration(String(tournament.id));
@@ -198,7 +197,7 @@ function TeamTournamentRegistrationContent({ onClose, tournament }: { onClose: (
 
   const registrationClosed = tournament.is_registration_closed;
   const canSubmitCreate =
-    !registrationClosed && teamName.trim().length >= 2 && teammates.length > 0 && !!captainMemberId && !createMutation.isPending;
+    !registrationClosed && teamName.trim().length >= 2 && teammates.length > 0 && !createMutation.isPending;
   const canSubmitJoin =
     !registrationClosed &&
     !!selectedTeamId &&
@@ -231,7 +230,6 @@ function TeamTournamentRegistrationContent({ onClose, tournament }: { onClose: (
       if (current.some((entry) => entry.id === draft.id)) return current;
       return [...current, draft];
     });
-    setCaptainMemberId((current) => current ?? draft.id);
     setCreateQuery("");
     setSelectedCreateFideId(null);
     setCreateFirstName("");
@@ -240,26 +238,25 @@ function TeamTournamentRegistrationContent({ onClose, tournament }: { onClose: (
 
   function removeTeammate(id: string) {
     setTeammates((current) => current.filter((entry) => entry.id !== id));
-    setCaptainMemberId((current) => (current === id ? null : current));
   }
 
   async function handleCreateTeam() {
-    const captain = teammates.find((entry) => entry.id === captainMemberId);
+    const captain = teammates[0];
     if (!captain) return;
+    const otherTeammates = teammates.slice(1);
     setFeedback(null);
     try {
       const response = await createMutation.mutateAsync({
         team_name: teamName.trim(),
         captain: teammateToPayload(captain),
-        teammate_player_ids: teammates.filter((entry) => entry.id !== captain.id && entry.kind === "existing").map((entry) => entry.playerId ?? 0),
-        teammate_fide_ids: teammates.filter((entry) => entry.id !== captain.id && entry.kind === "fide").map((entry) => entry.fideId ?? ""),
-        teammate_manual_entries: teammates
-          .filter((entry) => entry.id !== captain.id && entry.kind === "manual")
+        teammate_player_ids: otherTeammates.filter((entry) => entry.kind === "existing").map((entry) => entry.playerId ?? 0),
+        teammate_fide_ids: otherTeammates.filter((entry) => entry.kind === "fide").map((entry) => entry.fideId ?? ""),
+        teammate_manual_entries: otherTeammates
+          .filter((entry) => entry.kind === "manual")
           .map((entry) => ({ first_name: entry.firstName, last_name: entry.lastName })),
       });
       setCreatedTeam(response);
       setTeammates([]);
-      setCaptainMemberId(null);
     } catch (error) {
       setFeedback(readErrorMessage(error));
     }
@@ -400,7 +397,7 @@ function TeamTournamentRegistrationContent({ onClose, tournament }: { onClose: (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Composizione squadra</CardTitle>
-              <CardDescription>Seleziona il capitano, cambia l'ordine e rimuovi membri.</CardDescription>
+              <CardDescription>Il primo membro sara il riferimento della squadra. Trascina per cambiare ordine e rimuovere membri.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="space-y-2">
@@ -415,10 +412,8 @@ function TeamTournamentRegistrationContent({ onClose, tournament }: { onClose: (
                   {teammates.map((teammate) => (
                     <RosterRow
                       key={teammate.id}
-                      isCaptain={captainMemberId === teammate.id}
                       label={teammate.label}
                       onRemove={() => removeTeammate(teammate.id)}
-                      onSetCaptain={() => setCaptainMemberId(teammate.id)}
                     />
                   )) as ReactElement[]}
                 </ReorderList>
@@ -606,30 +601,28 @@ function IdentityCard({
 }
 
 function RosterRow({
-  isCaptain = false,
   label,
   onRemove,
-  onSetCaptain,
 }: {
-  isCaptain?: boolean;
   label: string;
   onRemove?: () => void;
-  onSetCaptain?: () => void;
 }) {
   return (
     <Item>
       <ItemContent className="flex items-center gap-2">
-        {isCaptain ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium">Capitano</span> : null}
         <ItemTitle>{label}</ItemTitle>
       </ItemContent>
       <ItemActions>
-        {onSetCaptain && !isCaptain ? (
-          <Button onClick={onSetCaptain} size="sm" type="button" variant="outline">
-            Capitano
-          </Button>
-        ) : null}
         {onRemove ? (
-          <Button onClick={onRemove} size="sm" type="button" variant="outline">
+          <Button
+            onClick={onRemove}
+            size="sm"
+            type="button"
+            variant="outline"
+            className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+            aria-label="Rimuovi membro"
+            title="Rimuovi membro"
+          >
             <Trash2 className="h-4 w-4" />
           </Button>
         ) : null}
@@ -829,8 +822,14 @@ function FooterActions({
     <div className="flex items-center justify-between gap-3">
       <div className="text-sm text-red-600">{feedback}</div>
       <div className="flex items-center gap-2">
-        <Button disabled={submitDisabled} onClick={onSubmit}>
-          {submitLabel}
+        <Button
+          disabled={submitDisabled}
+          onClick={onSubmit}
+          aria-label={submitLabel}
+          title={submitLabel}
+        >
+          {submitLabel.toLowerCase().includes("iscr") ? <UserPlus className="h-4 w-4" /> : null}
+          {submitLabel.toLowerCase().includes("iscr") ? null : submitLabel}
         </Button>
         <Button onClick={onClose} variant="outline">
           Chiudi

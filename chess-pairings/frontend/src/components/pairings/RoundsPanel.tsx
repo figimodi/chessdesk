@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Trash2 } from "lucide-react";
 import type { Pairing, PairingResult, Round, StandingEntry, TournamentPlayer, TournamentType } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,7 +102,7 @@ export function RoundsPanel({
           {canManage ? (
             <Button
               onClick={showConcludeTournament ? onConcludeTournament : onGenerateRound}
-              disabled={isTournamentConcluded || !registrationClosed || (showConcludeTournament ? !canConcludeTournament : !canGenerateNextRound) || isGenerating}
+              disabled={isTournamentConcluded || (showConcludeTournament ? !canConcludeTournament : !canGenerateNextRound) || isGenerating}
             >
               {isGenerating ? roundActionPendingLabel : roundActionLabel}
             </Button>
@@ -142,12 +143,19 @@ export function RoundsPanel({
             <div className="flex flex-wrap gap-2">
               <Button
                 onClick={showConcludeTournament ? onConcludeTournament : onGenerateRound}
-                disabled={isTournamentConcluded || !registrationClosed || (showConcludeTournament ? !canConcludeTournament : !canGenerateNextRound) || isGenerating}
+                disabled={isTournamentConcluded || (showConcludeTournament ? !canConcludeTournament : !canGenerateNextRound) || isGenerating}
               >
                 {isGenerating ? roundActionPendingLabel : roundActionLabel}
               </Button>
-              <Button variant="destructive" onClick={onDeleteLatestRound} disabled={!isLatestRoundSelected || isDeleting}>
-                {isDeleting ? "Eliminazione..." : `Elimina turno ${latestRound.number}`}
+              <Button
+                variant="outline"
+                className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                aria-label={`Elimina turno ${latestRound.number}`}
+                title={`Elimina turno ${latestRound.number}`}
+                onClick={onDeleteLatestRound}
+                disabled={!isLatestRoundSelected || isDeleting}
+              >
+                {isDeleting ? "Eliminazione..." : <Trash2 className="h-4 w-4" />}
               </Button>
             </div>
           ) : null}

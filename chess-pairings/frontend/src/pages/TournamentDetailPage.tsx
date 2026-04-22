@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { isAxiosError } from "axios";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import { CalendarDays, ChartColumn, Clock3, Hash, MapPin, Paperclip, User, Users, Zap, Turtle } from "lucide-react";
+import { CalendarDays, ChartColumn, Clock3, Hash, MapPin, Paperclip, SquarePen, Trash2, User, Users, Zap, Turtle } from "lucide-react";
 import { api } from "@/api/client";
 import { useFideSearch, useImportPlayerFromFide } from "@/api/hooks/players";
 import {
@@ -191,8 +191,7 @@ export function TournamentDetailPage() {
   const allResultsEnteredForLatestRound = latestGeneratedRound
     ? latestGeneratedRound.pairings.every((pairing) => pairing.result !== "unplayed")
     : true;
-  const canGenerateNextRound =
-    tournament?.is_registration_closed && generatedRounds.length < (tournament?.rounds_count ?? 0) && allResultsEnteredForLatestRound;
+  const canGenerateNextRound = generatedRounds.length < (tournament?.rounds_count ?? 0) && allResultsEnteredForLatestRound;
   const showConcludeTournament =
     !!tournament?.is_registration_closed && generatedRounds.length === (tournament?.rounds_count ?? 0) && generatedRounds.length > 0;
   const canConcludeTournament = showConcludeTournament && allResultsEnteredForLatestRound;
@@ -243,6 +242,19 @@ export function TournamentDetailPage() {
 
   const handleGenerateRound = async () => {
     try {
+      if (!tournament.is_registration_closed && nextRoundNumber === 1) {
+        setConfirmDialog({
+          title: "Chiudere iscrizioni e generare turno 1",
+          description: "Le iscrizioni non sono ancora chiuse. Vuoi chiudere le iscrizioni e generare subito il turno 1?",
+          confirmLabel: "Chiudi e genera",
+          action: async () => {
+            await closeRegistrationMutation.mutateAsync();
+            await generateMutation.mutateAsync();
+            setActiveTab("rounds");
+          },
+        });
+        return;
+      }
       await generateMutation.mutateAsync();
       setActiveTab("rounds");
     } catch (error) {
@@ -313,11 +325,22 @@ export function TournamentDetailPage() {
           secondaryActions={
             canManage ? (
               <>
-                <Button variant="secondary" asChild className="bg-yellow-100 text-yellow-900 hover:bg-yellow-200 border border-yellow-200">
-                  <Link to={`/tournaments/${tournament.id}/edit`}>Modifica</Link>
+                <Button
+                  variant="outline"
+                  asChild
+                  className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  aria-label="Modifica torneo"
+                  title="Modifica torneo"
+                >
+                  <Link to={`/tournaments/${tournament.id}/edit`}>
+                    <SquarePen className="h-4 w-4" />
+                  </Link>
                 </Button>
                 <Button
-                  variant="destructive"
+                  variant="outline"
+                  className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                  aria-label="Elimina torneo"
+                  title="Elimina torneo"
                   onClick={() => {
                     setConfirmDialog({
                       title: "Elimina torneo",
@@ -331,7 +354,7 @@ export function TournamentDetailPage() {
                     });
                   }}
                 >
-                  Elimina
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </>
             ) : null
@@ -502,7 +525,10 @@ export function TournamentDetailPage() {
                     </Button>
                   ) : null}
                   <Button
-                    variant="destructive"
+                    variant="outline"
+                    className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                    aria-label="Elimina partecipante"
+                    title="Elimina partecipante"
                     onClick={() => {
                       const selectedParticipant = sortedParticipants.find((player) => player.player_id === selectedParticipantId);
                       if (!selectedParticipant) return;
@@ -521,7 +547,7 @@ export function TournamentDetailPage() {
                       });
                     }}
                   >
-                    Elimina partecipante
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               ) : null}
@@ -571,6 +597,8 @@ export function TournamentDetailPage() {
             roundsCount={tournament.rounds_count}
             boardsPerMatch={tournament.boards_per_match ?? 0}
             category={tournament.time_control_category}
+            registrationClosed={tournament.is_registration_closed}
+            allowOrderEditWhenClosed={!tournament.enforce_board_order}
             onCreateTeam={(name) => createTeamMutation.mutate({ name })}
             onDeleteTeam={(teamId) => deleteTeamMutation.mutate(teamId)}
             onAssignMember={(teamId, playerId) => assignTeamMemberMutation.mutate({ teamId, player_id: playerId })}

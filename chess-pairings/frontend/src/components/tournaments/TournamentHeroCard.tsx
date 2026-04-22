@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CalendarDays, ChartColumn, Clock3, Hash, MapPin, Paperclip, User, Users, Zap, Turtle } from "lucide-react";
+import { CalendarDays, ChartColumn, Clock3, Hash, MapPin, Paperclip, User, UserPlus, Users, Zap, Turtle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,8 +80,11 @@ export function TournamentHeroCard({
                   onRegister()
                 }}
                 variant="outline"
+                className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                aria-label={registerButtonLabel ?? "Iscriviti"}
+                title={registerButtonLabel ?? "Iscriviti"}
               >
-                {registerButtonLabel ?? "Iscriviti"}
+                <UserPlus className="h-4 w-4" />
               </Button>
             ) : null}
             {secondaryActions}

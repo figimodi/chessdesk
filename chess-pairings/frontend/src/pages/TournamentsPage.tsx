@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { ArrowRight, Plus, Search } from "lucide-react";
+import { ArrowRight, Plus, Search, SquarePen, Trash2 } from "lucide-react";
 import { api } from "@/api/client";
 import { useTournaments } from "@/api/hooks/tournaments";
 import { useAuth } from "@/auth/AuthContext";
@@ -76,20 +76,27 @@ export function TournamentsPage() {
                       <>
                         <Button
                           asChild
-                          className="border border-yellow-200 bg-yellow-100 text-yellow-900 hover:bg-yellow-200"
+                          className="border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
                           onClick={(event) => event.stopPropagation()}
-                          variant="secondary"
+                          variant="outline"
+                          aria-label="Modifica torneo"
+                          title="Modifica torneo"
                         >
-                          <Link to={`/tournaments/${tournament.id}/edit`}>Modifica</Link>
+                          <Link to={`/tournaments/${tournament.id}/edit`}>
+                            <SquarePen className="h-4 w-4" />
+                          </Link>
                         </Button>
                         <Button
                           onClick={(event) => {
                             event.stopPropagation();
                             void api.deleteTournament(String(tournament.id)).then(() => navigate(0));
                           }}
-                          variant="destructive"
+                          variant="outline"
+                          className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                          aria-label="Elimina torneo"
+                          title="Elimina torneo"
                         >
-                          Elimina
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </>
                     ) : null

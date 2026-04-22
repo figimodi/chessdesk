@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import { useUsers, useCreateUser, useDeleteUser, useUpdateUser } from '@/api/hooks/users'
 import type { User } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
@@ -165,7 +166,16 @@ function UserRow({
       <div className="mt-4 flex items-center justify-between gap-3">
         <div className="flex gap-2">
           {currentUserId !== user.id ? (
-            <Button onClick={() => onRequestDelete(user)} type="button" variant="destructive">Elimina</Button>
+            <Button
+              onClick={() => onRequestDelete(user)}
+              type="button"
+              variant="outline"
+              className="border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+              aria-label="Elimina account"
+              title="Elimina account"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           ) : null}
           <Button onClick={() => void handleSave()} type="button">Salva</Button>
         </div>
