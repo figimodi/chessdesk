@@ -1,30 +1,54 @@
-import type { ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, CalendarDays, ChartColumn, Clock3, Hash, MapPin, Paperclip, Plus, User, Users, Zap, Turtle } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { ArrowRight, Plus, Search, SquarePen, Trash2 } from "lucide-react";
+import { api } from "@/api/client";
 import { useTournaments } from "@/api/hooks/tournaments";
+import { useAuth } from "@/auth/useAuth";
 import { AppShell } from "@/components/layout/AppShell";
-import { Badge } from "@/components/ui/badge";
+import { TournamentHeroCard } from "@/components/tournaments/TournamentHeroCard";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { TournamentRegistrationDialog } from "@/components/tournaments/TournamentRegistrationDialog";
 
 export function TournamentsPage() {
+  const { isAuthenticated, user } = useAuth();
   const { data: tournaments, isLoading } = useTournaments();
   const navigate = useNavigate();
-  const groupedTournaments = groupTournamentsByMonth(tournaments ?? []);
+  const [query, setQuery] = useState("");
+  const [registrationTournamentId, setRegistrationTournamentId] = useState<number | null>(null);
+  const filteredTournaments = useMemo(() => filterTournamentsByName(tournaments ?? [], query), [query, tournaments]);
+  const groupedTournaments = groupTournamentsByMonth(filteredTournaments);
+  const registrationTournament = filteredTournaments.find((tournament) => tournament.id === registrationTournamentId) ?? null;
+
+  if (isAuthenticated && user?.must_change_password) {
+    return <Navigate replace to="/change-password" />;
+  }
 
   return (
     <AppShell>
-      <section className="mb-8 flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold">Tornei</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">Gestisci e apri i tornei disponibili.</p>
+      {registrationTournament ? (
+        <TournamentRegistrationDialog onClose={() => setRegistrationTournamentId(null)} tournament={registrationTournament} />
+      ) : null}
+      <section className="mb-8">
+        <h1 className="text-3xl font-semibold">Tornei</h1>
+      </section>
+
+      <section className="mb-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative max-w-xl flex-1">
+            <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-[var(--muted-foreground)]" />
+            <Input className="pl-9" placeholder="Cerca tornei per nome" value={query} onChange={(event) => setQuery(event.target.value)} />
+          </div>
+          {isAuthenticated ? (
+            <Button asChild className="shrink-0">
+              <Link to="/tournaments/new">
+                <Plus className="h-4 w-4" />
+                Crea torneo
+              </Link>
+            </Button>
+          ) : null}
         </div>
-        <Button asChild>
-          <Link to="/tournaments/new">
-            <Plus className="h-4 w-4" />
-            Crea torneo
-          </Link>
-        </Button>
       </section>
 
       <section className="space-y-4">
@@ -32,99 +56,85 @@ export function TournamentsPage() {
           <div key={group.key} className="space-y-4">
             <MonthDivider label={group.label} year={group.year} showYear={index === 0 || groupedTournaments[index - 1].year !== group.year} />
             {group.tournaments.map((tournament) => (
-              <Card key={tournament.id} className="cursor-pointer" onClick={() => navigate(`/tournaments/${tournament.id}`)}>
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <CardTitle>{tournament.name}</CardTitle>
-                      <CardDescription>{tournament.venue ?? "Sede da definire"}</CardDescription>
-                    </div>
-                    <Badge>{tournament.type === "team" ? "Squadre" : "Individuale"}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <DetailHighlightCard icon={<MapPin className="h-4 w-4" />} label="Luogo" value={tournament.venue ?? "Sede da definire"} />
-                    <DetailHighlightCard
-                      icon={<CalendarDays className="h-4 w-4" />}
-                      label="Date"
-                      value={formatTournamentDates(tournament.start_date, tournament.end_date)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                    <div className="flex flex-wrap gap-2">
-                      <InfoChip icon={<ChartColumn className="h-4 w-4" />} label={tournament.is_elo_rated ? "Variazione Elo" : "No variazione Elo"} />
-                      {tournament.bulletin_url ? (
-                        <InfoChip icon={<Paperclip className="h-4 w-4" />} label="Bando" href={tournament.bulletin_url} />
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-sm text-[var(--muted-foreground)] md:justify-end">
-                      <InfoChip icon={timeControlIcon(tournament.time_control_category)} label={tournament.time_control} />
-                      <InfoChip
-                        icon={tournament.type === "team" ? <Users className="h-4 w-4" /> : <User className="h-4 w-4" />}
-                        label={`${tournament.type === "team" ? tournament.teams_count : tournament.players_count} ${tournament.type === "team" ? "squadre" : "giocatori"}`}
-                      />
-                      <InfoChip icon={<Hash className="h-4 w-4" />} label={`${tournament.rounds_count} turni`} />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <div key={tournament.id} className="cursor-pointer" onClick={() => navigate(`/tournaments/${tournament.id}`)}>
+                <TournamentHeroCard
+                  bulletinUrl={tournament.bulletin_url}
+                  datesLabel={formatTournamentDates(tournament.start_date, tournament.end_date)}
+                  description={tournament.description}
+                  isEloRated={tournament.is_elo_rated}
+                  isOwner={user?.id === tournament.owner_id}
+                  isPrivate={tournament.is_private}
+                  name={tournament.name}
+                  onRegister={
+                    !tournament.is_private && !tournament.is_registration_closed ? () => setRegistrationTournamentId(tournament.id) : undefined
+                  }
+                  participantsLabel={`${tournament.type === "team" ? tournament.teams_count : tournament.players_count}`}
+                  registerButtonLabel="Iscriviti"
+                  roundsLabel={`${tournament.rounds_count} turni`}
+                  secondaryActions={
+                    tournament.can_manage ? (
+                      <>
+                        <Button
+                          asChild
+                          className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
+                          onClick={(event) => event.stopPropagation()}
+                          variant="outline"
+                          aria-label="Modifica torneo"
+                          title="Modifica torneo"
+                        >
+                          <Link to={`/tournaments/${tournament.id}/edit`}>
+                            <SquarePen className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                        <Button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void api.deleteTournament(String(tournament.id)).then(() => navigate(0));
+                          }}
+                          variant="outline"
+                          className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
+                          aria-label="Elimina torneo"
+                          title="Elimina torneo"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : null
+                  }
+                  timeControl={tournament.time_control}
+                  timeControlCategory={tournament.time_control_category}
+                  type={tournament.type}
+                  venueLabel={tournament.venue ?? "Sede da definire"}
+                />
+              </div>
             ))}
           </div>
         ))}
-        {!isLoading && !tournaments?.length ? (
+        {!isLoading && !filteredTournaments.length ? (
           <Card>
             <CardContent className="flex items-center justify-between pt-6">
               <div>
-                <CardTitle>Nessun torneo configurato</CardTitle>
-                <CardDescription>Crea il primo torneo per iniziare la gestione pairings.</CardDescription>
+                <CardTitle>{query.trim() ? "Nessun torneo trovato" : "Nessun torneo configurato"}</CardTitle>
+                <CardDescription>
+                  {query.trim()
+                    ? "Prova a cercare con un'altra parola del nome del torneo."
+                    : isAuthenticated
+                      ? "Crea il primo torneo per iniziare la gestione pairings."
+                      : "Non ci sono ancora tornei pubblicati."}
+                </CardDescription>
               </div>
-              <Button asChild>
-                <Link to="/tournaments/new">
-                  Inizia <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
+              {isAuthenticated ? (
+                <Button asChild>
+                  <Link to="/tournaments/new">
+                    Inizia <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
         ) : null}
       </section>
     </AppShell>
-  );
-}
-
-function InfoChip({ icon, label, href }: { icon: ReactNode; label: string; href?: string }) {
-  const content = (
-    <>
-      <span className="text-[var(--muted-foreground)]">{icon}</span>
-      <span>{label}</span>
-    </>
-  );
-
-  if (href) {
-    return (
-      <a
-        className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-2 hover:bg-[var(--muted)]"
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-      >
-        {content}
-      </a>
-    );
-  }
-
-  return <div className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-2">{content}</div>;
-}
-
-function DetailHighlightCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex h-full items-start gap-3 rounded-2xl border bg-[var(--muted)] px-4 py-4">
-      <div className="rounded-xl border bg-white p-2 text-[var(--muted-foreground)]">{icon}</div>
-      <div className="min-w-0">
-        <div className="text-sm text-[var(--muted-foreground)]">{label}</div>
-        <div className="mt-1 text-base font-medium text-[var(--foreground)]">{value}</div>
-      </div>
-    </div>
   );
 }
 
@@ -139,12 +149,6 @@ function MonthDivider({ label, year, showYear }: { label: string; year: number; 
       </div>
     </div>
   );
-}
-
-function timeControlIcon(category: string) {
-  if (category === "blitz") return <Zap className="h-4 w-4" />;
-  if (category === "rapid") return <Clock3 className="h-4 w-4" />;
-  return <Turtle className="h-4 w-4" />;
 }
 
 function formatTournamentDates(startDate: string, endDate: string) {
@@ -182,4 +186,27 @@ function groupTournamentsByMonth<T extends { start_date: string } & { id: number
   });
 
   return groups;
+}
+
+function filterTournamentsByName<T extends { name: string }>(tournaments: T[], query: string) {
+  const normalizedQuery = normalizeSearch(query);
+  if (!normalizedQuery) {
+    return tournaments;
+  }
+
+  const queryTerms = normalizedQuery.split(" ").filter(Boolean);
+  return tournaments.filter((tournament) => {
+    const normalizedName = normalizeSearch(tournament.name);
+    return queryTerms.every((term) => normalizedName.includes(term));
+  });
+}
+
+function normalizeSearch(value: string) {
+  return value
+    .toLocaleLowerCase()
+    .normalize("NFD")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }

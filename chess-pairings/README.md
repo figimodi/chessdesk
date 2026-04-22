@@ -12,7 +12,7 @@ Il progetto segue i pattern principali di `kasparov-webapp`:
 - sessione DB in `backend/app/core/database.py`
 - router sottili in `backend/app/api/`
 - business logic e operazioni DB in `backend/app/services/`
-- un solo `docker-compose.yml` per sviluppo locale
+- configurazione Docker Compose con file base e override `dev`/`prod`
 - frontend con `React Query`, `router/`, `pages/`, `api/customClient.ts`
 - client API pensato per convergere su generazione OpenAPI
 
@@ -81,7 +81,7 @@ Regole pratiche:
 
 ### Tooling
 
-- Docker Compose con un solo file
+- Docker Compose con file base e override per ambiente
 - Poetry-ready backend tramite `pyproject.toml`
 - OpenAPI client workflow predisposto nel frontend
 
@@ -95,11 +95,13 @@ chess-pairings/
 ├── docker-compose.yml
 ├── README.md
 ├── backend/
-│   ├── Dockerfile
+│   ├── Dockerfile.dev
+│   ├── Dockerfile.prod
 │   ├── pyproject.toml
 │   ├── requirements.txt
-│   ├── db/
+│   ├── alembic/
 │   ├── storage/
+│   ├── tests/
 │   └── app/
 │       ├── main.py
 │       ├── api/
@@ -145,6 +147,59 @@ chess-pairings/
 ```
 
 ## Backend
+
+### Accesso e profili
+
+La homepage e la consultazione dei tornei sono pubbliche. Le operazioni di gestione richiedono autenticazione.
+
+Modello di accesso:
+
+- un account `admin`, creato o aggiornato automaticamente all'avvio tramite variabili ambiente
+- account `user` creati dall'admin dalla webapp
+- registrazione pubblica disponibile dalla homepage
+- la registrazione pubblica richiede conferma email prima del login
+- un visitatore anonimo puo' vedere tutti i tornei ma non puo' modificarli
+- l'admin vede e gestisce tutti i tornei pubblici
+- ogni `user` puo' vedere tutti i tornei ma modifica solo quelli di cui e' proprietario
+- gli utenti creati dall'admin devono cambiare la password al primo login prima di usare l'app
+- i visitatori possono iscriversi pubblicamente ai tornei con iscrizioni aperte
+- i tornei privati sono visibili e gestibili solo dal loro proprietario
+- il profilo utente espone username, email, cambio password, logout e accesso a `/users` per gli admin
+
+### Iscrizione pubblica ai tornei
+
+Un visitatore puo' iscriversi a un torneo direttamente:
+
+- cercando il proprio nominativo nel catalogo FIDE
+- oppure inserendosi manualmente con `cognome` e `nome`
+
+Per le iscrizioni manuali il rating iniziale assegnato e' `1399`.
+
+I pulsanti di iscrizione sono disponibili:
+
+- nelle card torneo della homepage
+- nella pagina di dettaglio del torneo
+
+Variabili ambiente rilevanti:
+
+- `AUTH_SECRET_KEY`
+- `AUTH_TOKEN_TTL_HOURS`
+- `EMAIL_CONFIRMATION_TOKEN_TTL_HOURS`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `ADMIN_USERNAME`
+- `FRONTEND_BASE_URL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
+- `SMTP_FROM_NAME`
+- `SMTP_USE_TLS`
+
+Il primo admin viene bootstrapato automaticamente all'avvio del backend solo se `ADMIN_EMAIL`, `ADMIN_PASSWORD` e `ADMIN_USERNAME` sono valorizzati.
+
+Il login applicativo usa lo `username`, non l'email. La login form principale e' nella homepage.
 
 ### Pattern applicato
 
@@ -225,9 +280,16 @@ Il frontend usa `Tailwind CSS + shadcn/ui`.
 
 ## API disponibili
 
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/confirm-email`
+- `POST /api/v1/auth/resend-confirmation`
+- `GET /api/v1/auth/me`
+- `POST /api/v1/auth/change-password`
 - `GET /health`
 - `GET /api/v1/tournaments/`
 - `GET /api/v1/tournaments/{tournament_id}`
+- `POST /api/v1/tournaments/{tournament_id}/register`
 - `POST /api/v1/admin/tournaments/`
 - `PUT /api/v1/admin/tournaments/{tournament_id}`
 - `DELETE /api/v1/admin/tournaments/{tournament_id}`
@@ -236,10 +298,25 @@ Il frontend usa `Tailwind CSS + shadcn/ui`.
 - `GET /api/v1/players/`
 - `GET /api/v1/players/fide/search`
 - `POST /api/v1/admin/players/import-from-fide`
+- `GET /api/v1/admin/users/`
+- `POST /api/v1/admin/users/`
+- `PATCH /api/v1/admin/users/{user_id}`
+- `DELETE /api/v1/admin/users/{user_id}`
 - `GET /api/v1/admin/tournaments/{tournament_id}/teams/`
 - `POST /api/v1/admin/tournaments/{tournament_id}/teams/`
+- `PUT /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}`
+- `DELETE /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}`
+- `POST /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}/members`
+- `DELETE /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}/members/{player_id}`
+- `PATCH /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}/members/order`
+- `PATCH /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}/availability`
+- `PATCH /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}/status`
+- `PATCH /api/v1/admin/tournaments/{tournament_id}/teams/{team_id}/lineup`
 - `POST /api/v1/admin/tournaments/{tournament_id}/pairings/generate`
+- `DELETE /api/v1/admin/tournaments/{tournament_id}/pairings/latest-round`
 - `PATCH /api/v1/admin/tournaments/{tournament_id}/pairings/results/{pairing_id}`
+- `POST /api/v1/admin/tournaments/{tournament_id}/close-registration`
+- `POST /api/v1/admin/tournaments/{tournament_id}/reopen-registration`
 
 Swagger:
 
@@ -250,7 +327,7 @@ Swagger:
 ### Docker
 
 ```sh
-cp .env.example .env
+cp .env.example .env.dev
 make compose
 ```
 
@@ -258,6 +335,105 @@ Comandi utili:
 
 - `make compose`
 - `make build-players-db`
+- `make compose ENV=prod`
+
+## Ambienti
+
+Il progetto usa una configurazione comune in `docker-compose.yml`, un override sviluppo in `docker-compose.dev.yml` e un override produzione in `docker-compose.prod.yml`.
+
+### Development
+
+- env file: `.env` oppure `.env.dev`
+- esempio: `.env.example`
+- frontend con `vite`
+- backend con `uvicorn --reload`
+- bind mounts attivi per sviluppo locale
+- immagini buildate da `Dockerfile.dev`
+
+Esempio:
+
+```sh
+cp .env.example .env.dev
+make compose
+```
+
+### Production
+
+- env file: `.env.prod`
+- esempio: `.env.example`
+- frontend buildato statico e servito da Nginx
+- backend senza `--reload`
+- nessun bind mount del codice applicativo
+- immagini buildate da `Dockerfile.prod`
+- Postgres non esposto pubblicamente
+
+Esempio:
+
+```sh
+cp .env.example .env.prod
+make compose ENV=prod
+```
+
+Variabili da personalizzare in produzione:
+
+- `POSTGRES_PASSWORD`
+- `DATABASE_URL`
+- `ALLOWED_ORIGINS`
+- `FILES_BASE_URL`
+- `VITE_API_URL`
+- `FRONTEND_BASE_URL`
+- `AUTH_SECRET_KEY`
+- `EMAIL_CONFIRMATION_TOKEN_TTL_HOURS`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
+- `SMTP_FROM_NAME`
+- `SMTP_USE_TLS`
+- `FRONTEND_PORT` se vuoi esporre il frontend su una porta diversa da `8080`
+
+Per un deploy con domini separati, la configurazione attesa e' questa:
+
+- `app.example.com` verso il container frontend
+- `api.example.com` verso il container backend
+
+Il reverse proxy TLS resta esterno a Docker Compose, ad esempio con Nginx o Caddy sul server.
+
+### Produzione su un solo dominio
+
+Non serve per forza un sottodominio separato per le API. Puoi usare:
+
+- frontend: `https://chessdesk.kasparov.polito.it`
+- API: `https://chessdesk.kasparov.polito.it/api/...`
+- files: `https://chessdesk.kasparov.polito.it/files/...`
+
+In questo caso, in `.env.prod` imposta cosi:
+
+```env
+POSTGRES_USER=chess
+POSTGRES_PASSWORD=<password-forte>
+POSTGRES_DB=chess_pairings
+POSTGRES_PORT=5432
+BACKEND_PORT=8010
+FRONTEND_PORT=8080
+DATABASE_URL=postgresql+asyncpg://chess:<password-forte>@postgres:5432/chess_pairings
+ALLOWED_ORIGINS=["https://chessdesk.kasparov.polito.it"]
+BBP_PAIRINGS_BIN=/usr/local/bin/bbpPairings
+BBP_PAIRINGS_SYSTEM=dutch
+FILES_BASE_URL=https://chessdesk.kasparov.polito.it
+PLAYER_LIST_FILE=/app/data/players_list_foa.txt
+VITE_API_URL=https://chessdesk.kasparov.polito.it
+```
+
+E' inclusa anche una configurazione Nginx host-level pronta in `deploy/nginx/chessdesk.kasparov.polito.it.conf`.
+
+Deploy tipico sul server:
+
+```sh
+cp .env.example .env.prod
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d --build
+```
 - `make logs`
 - `make ps`
 - `make down`
@@ -278,8 +454,7 @@ make build-players-db
 
 ```sh
 cd backend
-python3.12 -m venv .venv
-source .venv/bin/activate
+conda activate chessdesk
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
@@ -292,20 +467,9 @@ npm install
 npm run dev
 ```
 
-## Verifiche eseguite
+## Verifiche rapide
 
-- import backend OK con Python 3.12
-- build frontend OK con `npm run build`
-
-## Limiti attuali
-
-- la generazione client OpenAPI e' predisposta ma non ancora agganciata a file generati reali
-- non sono ancora presenti auth admin, Alembic e test automatici
-
-## Prossimi miglioramenti consigliati
-
-1. aggiungere Alembic come in `kasparov-webapp`
-2. generare davvero `frontend/src/api/client/` da OpenAPI
-3. introdurre autenticazione admin e ruoli
-4. aggiungere test async backend su standings, catalogo locale giocatori e pairings
-5. supportare piu' opzioni avanzate di `bbpPairings` e checklist ufficiale
+- backend test: `conda run -n chessdesk pytest -q`
+- backend coverage: `conda run -n chessdesk pytest --cov=app --cov-report=term-missing -q`
+- frontend lint: `npm run lint`
+- frontend build: `npm run build`

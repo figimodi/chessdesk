@@ -4,11 +4,12 @@ import { Paperclip } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useCreateTournament, useTournament, useUpdateTournament } from "@/api/hooks/tournaments";
 import { useUploadBulletin } from "@/api/hooks/tournaments";
+import { useUsers } from "@/api/hooks/users";
 import type { TournamentCreate } from "@/api/types";
+import { useAuth } from "@/auth/useAuth";
 import { AppShell } from "@/components/layout/AppShell";
 import { TournamentForm } from "@/components/tournaments/TournamentForm";
 import { AlertCard } from "@/components/ui/alert-card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -32,13 +33,18 @@ const emptyForm: TournamentCreate = {
   venue: "",
   description: "",
   is_published: false,
+  is_private: false,
+  owner_id: null,
   round_schedule: Array.from({ length: 5 }, () => ""),
 };
 
 export function TournamentFormPage({ mode }: { mode: "create" | "edit" }) {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { tournamentId = "" } = useParams();
-  const { data } = useTournament(tournamentId);
+  const { data, isError } = useTournament(tournamentId);
+  const isAdmin = user?.role === "admin";
+  const { data: users = [] } = useUsers(isAdmin && mode === "edit");
   const createMutation = useCreateTournament();
   const updateMutation = useUpdateTournament(tournamentId);
   const uploadMutation = useUploadBulletin(tournamentId);
@@ -69,11 +75,15 @@ export function TournamentFormPage({ mode }: { mode: "create" | "edit" }) {
         venue: data.venue ?? "",
         description: data.description ?? "",
         is_published: data.is_published,
+        is_private: data.is_private,
+        owner_id: data.owner_id ?? null,
         round_schedule: Array.from({ length: data.rounds_count }, (_, index) => data.rounds[index]?.scheduled_at?.slice(0, 16) ?? ""),
       };
     }
     return emptyForm;
   }, [data, mode]);
+
+  const ownerOptions = useMemo(() => users.map((entry) => ({ id: entry.id, label: `${entry.username} (${entry.email})` })), [users]);
 
   const [form, setForm] = useState<TournamentCreate>(initialState);
   const [alertMessage, setAlertMessage] = useState("");
@@ -98,6 +108,10 @@ export function TournamentFormPage({ mode }: { mode: "create" | "edit" }) {
       round_schedule: form.round_schedule.filter((value) => value.trim() !== ""),
     };
 
+    if (!isAdmin) {
+      delete sanitizedForm.owner_id;
+    }
+
     try {
       if (mode === "create") {
         const tournament = await createMutation.mutateAsync(sanitizedForm);
@@ -110,6 +124,10 @@ export function TournamentFormPage({ mode }: { mode: "create" | "edit" }) {
       setAlertMessage(readErrorMessage(error));
     }
   };
+
+  if (mode === "edit" && isError) {
+    return <AppShell>Torneo non trovato o non accessibile.</AppShell>;
+  }
 
   return (
     <AppShell>
@@ -124,6 +142,8 @@ export function TournamentFormPage({ mode }: { mode: "create" | "edit" }) {
             onChange={setForm}
             minimumRoundsCount={minimumRoundsCount}
             onRoundsCountValidityChange={setIsRoundsCountValid}
+            ownerOptions={ownerOptions}
+            showOwnerField={mode === "edit" && isAdmin}
           />
           <div className="flex flex-wrap gap-3">
             <label
@@ -158,7 +178,7 @@ export function TournamentFormPage({ mode }: { mode: "create" | "edit" }) {
               Annulla
             </Button>
             <Button onClick={handleSubmit} disabled={!isRoundsCountValid}>
-              {mode === "create" ? "Crea torneo" : "Salva modifiche"}
+              {mode === "create" ? "Crea torneo" : "Salva"}
             </Button>
           </div>
         </CardContent>
@@ -169,13 +189,10 @@ export function TournamentFormPage({ mode }: { mode: "create" | "edit" }) {
 
 function readErrorMessage(error: unknown) {
   if (isAxiosError(error)) {
+    const message = error.response?.data?.message;
+    if (typeof message === "string") return message;
     const detail = error.response?.data?.detail;
     if (typeof detail === "string") return detail;
-    if (Array.isArray(detail) && detail.length > 0) {
-      const firstIssue = detail[0];
-      if (typeof firstIssue?.msg === "string") return firstIssue.msg.replace(/^Value error,\s*/i, "");
-    }
-    if (typeof error.response?.data?.message === "string") return error.response.data.message;
     return error.message;
   }
   if (error instanceof Error) return error.message;

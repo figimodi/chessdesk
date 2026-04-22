@@ -1,5 +1,5 @@
 from app.schemas.common import ORMModel
-from pydantic import Field
+from pydantic import Field, model_validator
 
 
 class TeamCreate(ORMModel):
@@ -65,3 +65,43 @@ class TeamStandingEntry(ORMModel):
     head_to_head_match_points: float = 0
     head_to_head_individual_points: float = 0
     weighted_sonneborn: float = 0
+
+
+class PublicRegistrantIdentity(ORMModel):
+    fide_id: str | None = Field(default=None, min_length=4, max_length=20)
+    first_name: str | None = Field(default=None, min_length=2, max_length=60)
+    last_name: str | None = Field(default=None, min_length=2, max_length=60)
+
+    @model_validator(mode="after")
+    def validate_registration_payload(self):
+        has_fide = bool(self.fide_id)
+        has_manual_identity = bool(self.first_name and self.last_name)
+        if has_fide == has_manual_identity:
+            raise ValueError("Inserisci fide_id oppure nome e cognome")
+        return self
+
+
+class PublicTeamRegistrationCreate(ORMModel):
+    team_name: str = Field(min_length=2, max_length=120)
+    teammate_player_ids: list[int] = []
+    teammate_fide_ids: list[str] = []
+    teammate_manual_entries: list[PublicRegistrantIdentity] = []
+
+    @model_validator(mode="after")
+    def validate_has_at_least_one_member(self):
+        if not self.teammate_player_ids and not self.teammate_fide_ids and not self.teammate_manual_entries:
+            raise ValueError("La squadra deve contenere almeno un membro")
+        return self
+
+
+class PublicTeamRegistrationJoin(ORMModel):
+    team_id: int
+    pin: str = Field(min_length=4, max_length=4)
+    registrant: PublicRegistrantIdentity
+
+
+class PublicTeamRegistrationCreateResponse(ORMModel):
+    team_id: int
+    team_name: str
+    pin: str
+    members_count: int

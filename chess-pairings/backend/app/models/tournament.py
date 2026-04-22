@@ -11,6 +11,7 @@ from app.models.base import Base, TimestampMixin
 class TournamentType(str, enum.Enum):
     individual = "individual"
     team = "team"
+    quadriglia = "quadriglia"
 
 
 class TournamentFormat(str, enum.Enum):
@@ -47,11 +48,14 @@ class Tournament(Base, TimestampMixin):
     description: Mapped[Optional[str]] = mapped_column(String(1000))
     bulletin_path: Mapped[Optional[str]] = mapped_column(String(255))
     is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_private: Mapped[bool] = mapped_column(Boolean, default=False)
     is_registration_closed: Mapped[bool] = mapped_column(Boolean, default=False)
+    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_account.id", ondelete="SET NULL"))
 
     rounds = relationship("Round", back_populates="tournament", cascade="all, delete-orphan")
     players = relationship("TournamentPlayer", back_populates="tournament", cascade="all, delete-orphan")
     teams = relationship("Team", back_populates="tournament", cascade="all, delete-orphan")
+    owner = relationship("User", back_populates="tournaments")
 
 
 class TournamentPlayer(Base, TimestampMixin):

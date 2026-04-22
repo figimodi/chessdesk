@@ -228,7 +228,7 @@ class StandingsService:
         ratings: dict[int, float] = {}
         initial_ratings: dict[int, float] = {}
         for player_id, association in players_by_id.items():
-            rating = self._rating_for_category(association, category)
+            rating = self._fide_elo_rating_for_category(association, category)
             if rating is None:
                 continue
             ratings[player_id] = float(rating)
@@ -265,6 +265,20 @@ class StandingsService:
             player_id: round(ratings[player_id] - initial_ratings[player_id], 1)
             for player_id in ratings
         }
+
+    def _fide_elo_rating_for_category(self, association, category: str) -> int | None:
+        if association is None:
+            return None
+
+        player = association.player
+        if not player.fide_id:
+            return None
+
+        if category == "blitz":
+            return player.blitz_rating
+        if category == "rapid":
+            return player.rapid_rating
+        return player.rating
 
     def _rating_for_category(self, association, category: str) -> int | None:
         if association is None:

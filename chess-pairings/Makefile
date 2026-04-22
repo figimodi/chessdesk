@@ -1,4 +1,4 @@
-.PHONY: help compose down logs ps restart rebuild build-players-db update-swagger
+.PHONY: help compose down logs ps restart rebuild build-players-db test update-swagger migrate revision history current
 
 # Colors
 GREEN  := \033[0;32m
@@ -7,13 +7,22 @@ RED    := \033[0;31m
 NC     := \033[0m
 
 # Helpers
-ENV_FILE     = .env
-COMPOSE_CMD  = docker-compose --env-file $(ENV_FILE)
+ENV ?= dev
+
+ifeq ($(ENV),prod)
+	ENV_FILE ?= .env.prod
+	COMPOSE_FILES = -f docker-compose.yml -f docker-compose.prod.yml
+else
+	ENV_FILE ?= .env.dev
+	COMPOSE_FILES = -f docker-compose.yml -f docker-compose.dev.yml
+endif
+
+COMPOSE_CMD = docker-compose $(COMPOSE_FILES) --env-file $(ENV_FILE)
 
 define check_env
 	@if [ ! -f "$(ENV_FILE)" ]; then \
 		echo "$(RED)Error: env file not found: $(ENV_FILE)$(NC)"; \
-		echo "$(YELLOW)Create it with: cp .env.example .env$(NC)"; \
+		echo "$(YELLOW)Create it with: cp .env.example $(ENV_FILE)$(NC)"; \
 		exit 1; \
 	fi
 endef
@@ -26,6 +35,11 @@ help:
 	@echo ""
 	@echo "$(YELLOW)Usage: make <command>$(NC)"
 	@echo ""
+	@echo "$(YELLOW)Environment:$(NC)"
+	@echo "  $(GREEN)ENV=dev$(NC)          Use local development configuration"
+	@echo "  $(GREEN)ENV=prod$(NC)         Use production configuration override"
+	@echo "  $(GREEN)ENV_FILE=.env.prod$(NC) Override the env file path"
+	@echo ""
 	@echo "$(YELLOW)Commands:$(NC)"
 	@echo "  $(GREEN)compose$(NC)         Build images and start all containers in detached mode"
 	@echo "  $(GREEN)restart$(NC)         Restart all containers preserving volumes"
@@ -34,14 +48,22 @@ help:
 	@echo "  $(GREEN)logs$(NC)            Follow live log output from all running containers"
 	@echo "  $(GREEN)ps$(NC)              List containers and their current status"
 	@echo "  $(GREEN)build-players-db$(NC) Rebuild catalog_player table from backend/data/players_list_foa.txt"
+	@echo "  $(GREEN)test$(NC)            Run backend test suite in conda env chessdesk"
+	@echo "  $(GREEN)migrate$(NC)         Run Alembic migrations on the backend container"
+	@echo "  $(GREEN)revision$(NC)        Create a new Alembic migration (use name=\"...\")"
+	@echo "  $(GREEN)history$(NC)         Show Alembic migration history"
+	@echo "  $(GREEN)current$(NC)         Show current Alembic revision in the database"
 	@echo "  $(GREEN)update-swagger$(NC)  Fetch backend OpenAPI into frontend/src/api/swagger.yaml"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
-	@echo "  cp .env.example .env"
+	@echo "  cp .env.example .env.dev"
 	@echo "  make compose"
+	@echo "  cp .env.example .env.prod"
+	@echo "  make compose ENV=prod"
 	@echo "  make restart"
 	@echo "  make rebuild"
 	@echo "  make build-players-db"
+	@echo "  make test"
 	@echo "  make logs"
 	@echo "  make down"
 	@echo ""
@@ -83,5 +105,34 @@ build-players-db:
 	@echo "$(GREEN)Rebuilding catalog_player table from TXT file...$(NC)"
 	$(COMPOSE_CMD) run --rm app python -m app.scripts.build_players_db
 
+test:
+	@echo "$(GREEN)Running backend tests in chessdesk env...$(NC)"
+	conda run -n chessdesk pytest -q backend/tests
+
+migrate:
+	$(call check_env)
+	@echo "$(GREEN)Running Alembic migrations...$(NC)"
+	$(COMPOSE_CMD) run --rm app python -m app.scripts.migrate
+
+revision:
+	$(call check_env)
+	@if [ -z "$(name)" ]; then \
+		echo "$(RED)Error: missing migration name$(NC)"; \
+		echo "$(YELLOW)Usage: make revision name=\"add team pin\"$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Creating Alembic migration: $(name)$(NC)"
+	$(COMPOSE_CMD) run --rm app alembic revision -m "$(name)"
+
+history:
+	$(call check_env)
+	@echo "$(GREEN)Alembic history:$(NC)"
+	$(COMPOSE_CMD) run --rm app alembic history
+
+current:
+	$(call check_env)
+	@echo "$(GREEN)Current Alembic revision:$(NC)"
+	$(COMPOSE_CMD) run --rm app alembic current
+
 update-swagger:
-	cd frontend && curl http://localhost:8010/openapi.json -o ./src/api/swagger.yaml
+	curl http://localhost:8010/openapi.json -o frontend/src/api/swagger.yaml

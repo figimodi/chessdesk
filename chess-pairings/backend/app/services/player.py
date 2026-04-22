@@ -30,6 +30,18 @@ async def create_player(db: AsyncSession, data: PlayerCreate) -> Player:
     return player
 
 
+async def create_public_manual_player(
+    db: AsyncSession, *, first_name: str, last_name: str
+) -> Player:
+    payload = PlayerCreate(
+        full_name=f"{last_name.strip()}, {first_name.strip()}",
+        rating=1399,
+        rapid_rating=1399,
+        blitz_rating=1399,
+    )
+    return await create_player(db, payload)
+
+
 async def search_fide_players(
     db: AsyncSession, query: str, category: str | None = None
 ):

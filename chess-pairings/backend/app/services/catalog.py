@@ -41,7 +41,7 @@ def resolve_catalog_path() -> Path:
             return path
 
     raise FileNotFoundError(
-        "players_list_foa.txt not found. Checked: "
+        "players_list_foa.txt non trovato. Percorsi verificati: "
         + ", ".join(str(path) for path in candidate_paths)
     )
 

@@ -1,4 +1,4 @@
-export type TournamentType = "individual" | "team";
+export type TournamentType = "individual" | "team" | "quadriglia";
 export type TournamentFormat = "swiss";
 export type PairingResult = "1-0" | "0-1" | "1/2-1/2" | "1-0F" | "0-1F" | "0F-0F" | "1F-1F" | "1-bye" | "unplayed";
 
@@ -24,10 +24,13 @@ export type TournamentListItem = {
   venue?: string | null;
   description?: string | null;
   is_published: boolean;
+  is_private: boolean;
   is_registration_closed: boolean;
   bulletin_url?: string | null;
   players_count: number;
   teams_count: number;
+  can_manage: boolean;
+  owner_id?: number | null;
 };
 
 export type TournamentPlayer = {
@@ -162,6 +165,8 @@ export type TournamentCreate = {
   venue?: string;
   description?: string;
   is_published: boolean;
+  is_private: boolean;
+  owner_id?: number | null;
   round_schedule: string[];
 };
 
@@ -189,3 +194,82 @@ export type FidePlayer = {
   birth_year?: number | null;
   fide_title?: string | null;
 };
+
+export type UserRole = 'admin' | 'user'
+
+export type User = {
+  id: number
+  email: string
+  username: string
+  role: UserRole
+  is_active: boolean
+  email_confirmed: boolean
+  must_change_password: boolean
+}
+
+export type AuthToken = {
+  access_token: string
+  token_type: 'bearer'
+  user: User
+}
+
+export type UserCreate = {
+  email: string
+  username: string
+  password: string
+}
+
+export type UserUpdate = {
+  username?: string
+  password?: string
+  is_active?: boolean
+}
+
+export type TournamentPublicRegistration = {
+  fide_id?: string
+  first_name?: string
+  last_name?: string
+}
+
+export type PublicTeamRegistrationCreate = {
+  team_name: string
+  teammate_player_ids: number[]
+  teammate_fide_ids: string[]
+  teammate_manual_entries: TournamentPublicRegistration[]
+}
+
+export type PublicTeamRegistrationJoin = {
+  team_id: number
+  pin: string
+  registrant: TournamentPublicRegistration
+}
+
+export type PublicTeamRegistrationCreateResponse = {
+  team_id: number
+  team_name: string
+  pin: string
+  members_count: number
+}
+
+export type PasswordChangeRequest = {
+  current_password: string
+  new_password: string
+}
+
+export type PublicRegistrationRequest = {
+  email: string
+  username: string
+  password: string
+}
+
+export type EmailConfirmationRequest = {
+  token: string
+}
+
+export type EmailConfirmationResendRequest = {
+  email: string
+}
+
+export type MessageResponse = {
+  message: string
+}

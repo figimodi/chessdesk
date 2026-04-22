@@ -22,6 +22,7 @@ ALLOWED_TIE_BREAKS = {
 
 INDIVIDUAL_DEFAULT_TIE_BREAKS = ["buchholz_cut1", "buchholz", "sonneborn_berger"]
 TEAM_DEFAULT_TIE_BREAKS = ["individual_points", "head_to_head", "weighted_sonneborn"]
+QUADRIGLIA_DEFAULT_TIE_BREAKS = ["head_to_head"]
 
 
 class TournamentBase(ORMModel):
@@ -44,6 +45,7 @@ class TournamentBase(ORMModel):
     venue: str | None = Field(default=None, max_length=120)
     description: str | None = Field(default=None, max_length=1000)
     is_published: bool = False
+    is_private: bool = False
     is_registration_closed: bool = False
 
     @field_validator("end_date")
@@ -58,13 +60,13 @@ class TournamentBase(ORMModel):
     @classmethod
     def validate_tie_breaks(cls, value: list[str]):
         if not value:
-            raise ValueError("At least one tie-break must be selected")
+            raise ValueError("Devi selezionare almeno uno spareggio")
         normalized = [item.strip() for item in value if item.strip()]
         if len(normalized) != len(set(normalized)):
-            raise ValueError("Tie-breaks must be unique")
+            raise ValueError("Gli spareggi devono essere univoci")
         invalid = [item for item in normalized if item not in ALLOWED_TIE_BREAKS]
         if invalid:
-            raise ValueError(f"Unsupported tie-breaks: {', '.join(invalid)}")
+            raise ValueError(f"Spareggi non supportati: {', '.join(invalid)}")
         return normalized
 
     @field_validator("match_points_draw")
@@ -72,7 +74,7 @@ class TournamentBase(ORMModel):
     def validate_draw_points(cls, value: int | None, info):
         win_points = info.data.get("match_points_win")
         if value is not None and win_points is not None and value > win_points:
-            raise ValueError("draw points cannot exceed win points")
+            raise ValueError("I punti patta non possono superare i punti vittoria")
         return value
 
     @field_validator("match_points_loss")
@@ -80,12 +82,12 @@ class TournamentBase(ORMModel):
     def validate_loss_points(cls, value: int | None, info):
         draw_points = info.data.get("match_points_draw")
         if value is not None and draw_points is not None and value > draw_points:
-            raise ValueError("loss points cannot exceed draw points")
+            raise ValueError("I punti sconfitta non possono superare i punti patta")
         return value
 
     @model_validator(mode="after")
     def validate_team_settings(self):
-        if self.type != TournamentType.team:
+        if self.type not in (TournamentType.team, TournamentType.quadriglia):
             return self
 
         required_values = {
@@ -97,9 +99,15 @@ class TournamentBase(ORMModel):
         }
         missing = [key for key, value in required_values.items() if value is None]
         if missing:
-            raise ValueError(f"Missing team tournament settings: {', '.join(missing)}")
+            raise ValueError(f"Parametri mancanti del torneo a squadre: {', '.join(missing)}")
+        if self.type == TournamentType.quadriglia:
+            if self.max_players_per_team != 2 or self.boards_per_match != 2:
+                raise ValueError("Nei tornei Quadriglia ci devono essere esattamente 2 giocatori per squadra in ogni incontro.")
+            if any(item != "head_to_head" for item in self.tie_breaks):
+                raise ValueError("Nel tipo Quadriglia e consentito solo lo spareggio head_to_head.")
+            return self
         if self.max_players_per_team < self.boards_per_match:
-            raise ValueError("max_players_per_team must be greater than or equal to boards_per_match")
+            raise ValueError("max_players_per_team deve essere maggiore o uguale a boards_per_match")
         return self
 
 
@@ -141,7 +149,9 @@ class TournamentUpdate(ORMModel):
     venue: str | None = None
     description: str | None = None
     is_published: bool | None = None
+    is_private: bool | None = None
     is_registration_closed: bool | None = None
+    owner_id: int | None = None
     round_schedule: list[datetime] | None = None
 
     @model_validator(mode="after")
@@ -164,6 +174,8 @@ class TournamentListItem(TournamentBase):
     bulletin_url: str | None = None
     players_count: int = 0
     teams_count: int = 0
+    can_manage: bool = False
+    owner_id: int | None = None
 
 
 class TournamentPlayerAssign(ORMModel):
@@ -173,6 +185,20 @@ class TournamentPlayerAssign(ORMModel):
     seed_number: int | None = None
     initial_rating: int | None = None
     allow_late_join: bool = False
+
+
+class TournamentPublicRegistration(ORMModel):
+    fide_id: str | None = Field(default=None, min_length=4, max_length=20)
+    first_name: str | None = Field(default=None, min_length=2, max_length=60)
+    last_name: str | None = Field(default=None, min_length=2, max_length=60)
+
+    @model_validator(mode="after")
+    def validate_registration_payload(self):
+        has_fide = bool(self.fide_id)
+        has_manual_identity = bool(self.first_name and self.last_name)
+        if has_fide == has_manual_identity:
+            raise ValueError("Inserisci fide_id oppure nome e cognome")
+        return self
 
 
 class TournamentPlayerAvailabilityUpdate(ORMModel):

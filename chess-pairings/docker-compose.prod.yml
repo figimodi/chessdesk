@@ -1,0 +1,30 @@
+services:
+  postgres:
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8010}:8000"
+    environment:
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      FILES_BASE_URL: ${FILES_BASE_URL}
+      PLAYER_LIST_FILE: ${PLAYER_LIST_FILE:-/app/data/players_list_foa.txt}
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+
+networks:
+  default:
+    name: chess-pairings-prod

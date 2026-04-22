@@ -6,6 +6,7 @@ package-mode = false
 authors = [{ name = "Filippo Greco" }]
 requires-python = ">=3.12"
 dependencies = [
+    "alembic (>=1.16.5,<2.0.0)",
     "fastapi (>=0.115.12,<0.116.0)",
     "uvicorn[standard] (>=0.34.0,<0.35.0)",
     "sqlalchemy (>=2.0.39,<3.0.0)",
@@ -14,6 +15,7 @@ dependencies = [
     "httpx (>=0.28.1,<0.29.0)",
     "pydantic-settings (>=2.8.1,<3.0.0)",
     "python-multipart (>=0.0.20,<0.0.21)",
+    "email-validator (>=2.2.0,<3.0.0)",
 ]
 
 [build-system]
@@ -22,6 +24,7 @@ build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
 dev = [
+    "aiosqlite (>=0.21.0,<0.22.0)",
     "pytest (>=8.3.5,<9.0.0)",
     "pytest-asyncio (>=0.26.0,<0.27.0)",
 ]

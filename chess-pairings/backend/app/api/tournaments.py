@@ -1,52 +1,66 @@
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_tournament_or_404
+from app.api.deps import get_current_user, get_optional_current_user, get_tournament_or_404
 from app.core.database import get_db
 from app.schemas.tournament import (
     TournamentCreate,
     TournamentDetail,
     TournamentListItem,
+    TournamentPublicRegistration,
     TournamentPlayerAssign,
     TournamentPlayerAvailabilityUpdate,
     TournamentPlayerRead,
     TournamentPlayerStatusUpdate,
     TournamentUpdate,
 )
+from app.schemas.team import PublicTeamRegistrationCreate, PublicTeamRegistrationCreateResponse, PublicTeamRegistrationJoin
 from app.services import tournament as tournament_service
 
 router = APIRouter(tags=["tournaments"])
 
 
 @router.get("/api/v1/tournaments/", response_model=list[TournamentListItem])
-async def get_tournaments(db: AsyncSession = Depends(get_db)):
-    tournaments = await tournament_service.get_tournaments(db)
-    return [tournament_service.serialize_tournament_list_item(item) for item in tournaments]
+async def get_tournaments(
+    db: AsyncSession = Depends(get_db), current_user=Depends(get_optional_current_user)
+):
+    tournaments = await tournament_service._get_tournament_unscoped_list(db)
+    return [
+        tournament_service.serialize_tournament_list_item(item, current_user)
+        for item in tournaments
+        if tournament_service.can_view_tournament(item, current_user)
+    ]
 
 
 @router.get("/api/v1/tournaments/{tournament_id}", response_model=TournamentDetail)
 async def get_tournament(
-    tournament=Depends(get_tournament_or_404), db: AsyncSession = Depends(get_db)
+    tournament_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_optional_current_user),
 ):
-    return await tournament_service.serialize_tournament_detail(db, tournament)
+    tournament = await tournament_service._get_tournament_unscoped(db, tournament_id)
+    if tournament is None or not tournament_service.can_view_tournament(tournament, current_user):
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    return await tournament_service.serialize_tournament_detail(db, tournament, current_user)
 
 
 @router.post("/api/v1/admin/tournaments/", response_model=TournamentListItem, status_code=201)
 async def create_tournament(
-    data: TournamentCreate, db: AsyncSession = Depends(get_db)
+    data: TournamentCreate, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)
 ):
-    tournament = await tournament_service.create_tournament(db, data)
-    return tournament_service.serialize_tournament_list_item(tournament)
+    tournament = await tournament_service.create_tournament(db, data, current_user)
+    return tournament_service.serialize_tournament_list_item(tournament, current_user)
 
 
 @router.put("/api/v1/admin/tournaments/{tournament_id}", response_model=TournamentListItem)
 async def update_tournament(
     data: TournamentUpdate,
     tournament=Depends(get_tournament_or_404),
+    current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    updated = await tournament_service.update_tournament(db, tournament, data)
-    return tournament_service.serialize_tournament_list_item(updated)
+    updated = await tournament_service.update_tournament(db, tournament, data, current_user)
+    return tournament_service.serialize_tournament_list_item(updated, current_user)
 
 
 @router.delete("/api/v1/admin/tournaments/{tournament_id}")
@@ -55,6 +69,53 @@ async def delete_tournament(
 ):
     await tournament_service.delete_tournament(db, tournament)
     return {"ok": True}
+
+
+@router.post(
+    "/api/v1/tournaments/{tournament_id}/register",
+    response_model=TournamentPlayerRead,
+)
+async def register_to_tournament(
+    tournament_id: int,
+    data: TournamentPublicRegistration,
+    db: AsyncSession = Depends(get_db),
+):
+    tournament = await tournament_service._get_tournament_unscoped(db, tournament_id)
+    if tournament is None or not tournament_service.can_view_tournament(tournament, None):
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    entry = await tournament_service.register_public_player(db, tournament, data)
+    return tournament_service.serialize_tournament_player(entry)
+
+
+@router.post(
+    "/api/v1/tournaments/{tournament_id}/team-registration/create",
+    response_model=PublicTeamRegistrationCreateResponse,
+)
+async def create_team_registration(
+    tournament_id: int,
+    data: PublicTeamRegistrationCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    tournament = await tournament_service._get_tournament_unscoped(db, tournament_id)
+    if tournament is None or not tournament_service.can_view_tournament(tournament, None):
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    return await tournament_service.register_public_team(db, tournament, data)
+
+
+@router.post(
+    "/api/v1/tournaments/{tournament_id}/team-registration/join",
+    response_model=TournamentPlayerRead,
+)
+async def join_team_registration(
+    tournament_id: int,
+    data: PublicTeamRegistrationJoin,
+    db: AsyncSession = Depends(get_db),
+):
+    tournament = await tournament_service._get_tournament_unscoped(db, tournament_id)
+    if tournament is None or not tournament_service.can_view_tournament(tournament, None):
+        raise HTTPException(status_code=404, detail="Torneo non trovato")
+    entry = await tournament_service.join_public_team(db, tournament, data)
+    return tournament_service.serialize_tournament_player(entry)
 
 
 @router.post(
@@ -68,6 +129,16 @@ async def assign_player(
 ):
     entry = await tournament_service.assign_player(db, tournament, data)
     return tournament_service.serialize_tournament_player(entry)
+
+
+@router.delete("/api/v1/admin/tournaments/{tournament_id}/players/{player_id}")
+async def remove_player(
+    player_id: int,
+    tournament=Depends(get_tournament_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    await tournament_service.remove_player(db, tournament, player_id)
+    return {"ok": True}
 
 
 @router.patch(
@@ -107,7 +178,7 @@ async def close_registration(
     db: AsyncSession = Depends(get_db),
 ):
     updated = await tournament_service.close_registration(db, tournament)
-    return tournament_service.serialize_tournament_list_item(updated)
+    return tournament_service.serialize_tournament_list_item(updated, tournament.owner)
 
 
 @router.post(
@@ -119,7 +190,7 @@ async def reopen_registration(
     db: AsyncSession = Depends(get_db),
 ):
     updated = await tournament_service.reopen_registration(db, tournament)
-    return tournament_service.serialize_tournament_list_item(updated)
+    return tournament_service.serialize_tournament_list_item(updated, tournament.owner)
 
 
 @router.post("/api/v1/admin/tournaments/{tournament_id}/bulletin")

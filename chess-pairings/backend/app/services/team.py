@@ -1,3 +1,5 @@
+import secrets
+
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +28,8 @@ async def get_teams(db: AsyncSession, tournament_id: int) -> list[Team]:
 
 
 async def create_team(db: AsyncSession, tournament_id: int, data: TeamCreate) -> Team:
-    team = Team(tournament_id=tournament_id, **data.model_dump())
+    existing_teams = await get_teams(db, tournament_id)
+    team = Team(tournament_id=tournament_id, join_pin=_generate_join_pin(existing_teams), **data.model_dump())
     db.add(team)
     await db.commit()
     return await _reload_team(db, team.id)
@@ -69,7 +72,7 @@ async def update_team_status(db: AsyncSession, team: Team, data: TeamStatusUpdat
 async def update_team_lineup(db: AsyncSession, team: Team, data: TeamLineupUpdate) -> Team:
     member = next((item for item in team.members if item.player_id == data.player_id), None)
     if member is None:
-        raise HTTPException(status_code=404, detail="Player not found in team")
+        raise HTTPException(status_code=404, detail="Giocatore non trovato nella squadra")
 
     boards = team.tournament.boards_per_match or 0
     selected_count = 0
@@ -113,11 +116,11 @@ async def delete_team(db: AsyncSession, team: Team) -> None:
 async def assign_member(db: AsyncSession, tournament: Tournament, team: Team, data: TeamMemberAssign) -> Team:
     member = next((item for item in tournament.players if item.player_id == data.player_id), None)
     if member is None:
-        raise HTTPException(status_code=404, detail="Player not found in tournament")
+        raise HTTPException(status_code=404, detail="Giocatore non trovato nel torneo")
     if member.team_id == team.id:
         return team
     if team.tournament_id != tournament.id:
-        raise HTTPException(status_code=409, detail="Team does not belong to tournament")
+        raise HTTPException(status_code=409, detail="La squadra non appartiene al torneo")
 
     if tournament.max_players_per_team is not None:
         current_members = [item for item in tournament.players if item.team_id == team.id and item.player_id != member.player_id]
@@ -141,7 +144,7 @@ async def assign_member(db: AsyncSession, tournament: Tournament, team: Team, da
 async def remove_member(db: AsyncSession, team: Team, player_id: int) -> Team:
     member = next((item for item in team.members if item.player_id == player_id), None)
     if member is None:
-        raise HTTPException(status_code=404, detail="Player not found in team")
+        raise HTTPException(status_code=404, detail="Giocatore non trovato nella squadra")
 
     member.team_id = None
     member.team_board_order = None
@@ -220,8 +223,9 @@ async def _reload_team(db: AsyncSession, team_id: int) -> Team | None:
     result = await db.execute(
         select(Team)
         .where(Team.id == team_id)
+        .execution_options(populate_existing=True)
         .options(
-            selectinload(Team.tournament),
+            selectinload(Team.tournament).selectinload(Tournament.players).selectinload(TournamentPlayer.player),
             selectinload(Team.members).selectinload(TournamentPlayer.player),
             selectinload(Team.members).selectinload(TournamentPlayer.availabilities),
             selectinload(Team.availabilities),
@@ -239,3 +243,12 @@ async def _normalize_board_order(db: AsyncSession, team: Team) -> None:
 
 def _next_board_order(members: list[TournamentPlayer]) -> int:
     return max((member.team_board_order or 0 for member in members), default=0) + 1
+
+
+def _generate_join_pin(teams: list[Team]) -> str:
+    used_pins = {team.join_pin for team in teams}
+    for _ in range(1000):
+        candidate = f"{secrets.randbelow(10000):04d}"
+        if candidate not in used_pins:
+            return candidate
+    raise HTTPException(status_code=500, detail="Non sono riuscito a generare un PIN squadra")

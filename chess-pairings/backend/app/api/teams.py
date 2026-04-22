@@ -37,7 +37,7 @@ async def update_team(
 ):
     team = await team_service.get_team(db, team_id)
     if team is None or team.tournament_id != tournament.id:
-        raise HTTPException(status_code=404, detail="Team not found")
+        raise HTTPException(status_code=404, detail="Squadra non trovata")
     team = await team_service.update_team(db, team, data)
     return team_service.serialize_team(team)
 
@@ -50,7 +50,7 @@ async def delete_team(
 ):
     team = await team_service.get_team(db, team_id)
     if team is None or team.tournament_id != tournament.id:
-        raise HTTPException(status_code=404, detail="Team not found")
+        raise HTTPException(status_code=404, detail="Squadra non trovata")
     await team_service.delete_team(db, team)
     return {"ok": True}
 
@@ -64,7 +64,7 @@ async def assign_team_member(
 ):
     team = await team_service.get_team(db, team_id)
     if team is None or team.tournament_id != tournament.id:
-        raise HTTPException(status_code=404, detail="Team not found")
+        raise HTTPException(status_code=404, detail="Squadra non trovata")
     updated = await team_service.assign_member(db, tournament, team, data)
     return team_service.serialize_team(updated)
 
@@ -78,7 +78,7 @@ async def remove_team_member(
 ):
     team = await team_service.get_team(db, team_id)
     if team is None or team.tournament_id != tournament.id:
-        raise HTTPException(status_code=404, detail="Team not found")
+        raise HTTPException(status_code=404, detail="Squadra non trovata")
     updated = await team_service.remove_member(db, team, player_id)
     return team_service.serialize_team(updated)
 
@@ -92,7 +92,7 @@ async def reorder_team_members(
 ):
     team = await team_service.get_team(db, team_id)
     if team is None or team.tournament_id != tournament.id:
-        raise HTTPException(status_code=404, detail="Team not found")
+        raise HTTPException(status_code=404, detail="Squadra non trovata")
     updated = await team_service.reorder_members(db, team, data)
     return team_service.serialize_team(updated)
 
@@ -106,7 +106,7 @@ async def update_team_availability(
 ):
     team = await team_service.get_team(db, team_id)
     if team is None or team.tournament_id != tournament.id:
-        raise HTTPException(status_code=404, detail="Team not found")
+        raise HTTPException(status_code=404, detail="Squadra non trovata")
     updated = await team_service.update_team_availability(db, team, data)
     return team_service.serialize_team(updated)
 
@@ -120,7 +120,7 @@ async def update_team_status(
 ):
     team = await team_service.get_team(db, team_id)
     if team is None or team.tournament_id != tournament.id:
-        raise HTTPException(status_code=404, detail="Team not found")
+        raise HTTPException(status_code=404, detail="Squadra non trovata")
     updated = await team_service.update_team_status(db, team, data)
     return team_service.serialize_team(updated)
 
@@ -134,6 +134,6 @@ async def update_team_lineup(
 ):
     team = await team_service.get_team(db, team_id)
     if team is None or team.tournament_id != tournament.id:
-        raise HTTPException(status_code=404, detail="Team not found")
+        raise HTTPException(status_code=404, detail="Squadra non trovata")
     updated = await team_service.update_team_lineup(db, team, data)
     return team_service.serialize_team(updated)

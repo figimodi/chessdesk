@@ -1,6 +1,6 @@
 import { api } from "@/api/client";
 import { QueryCacheKeys } from "@/api/queryCacheKeys";
-import type { TournamentCreate, TournamentUpdate } from "@/api/types";
+import type { PublicTeamRegistrationCreate, PublicTeamRegistrationJoin, TournamentCreate, TournamentPublicRegistration, TournamentUpdate } from "@/api/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function useTournaments() {
@@ -14,6 +14,7 @@ export function useTournament(tournamentId: string) {
   return useQuery({
     queryKey: QueryCacheKeys.tournament(tournamentId),
     queryFn: () => api.getTournament(tournamentId),
+    enabled: Boolean(tournamentId),
   });
 }
 
@@ -68,6 +69,17 @@ export function useDeleteLatestRound(tournamentId: string) {
   });
 }
 
+export function useUpdatePairingBoardOrder(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { pairingId: number; side: 'white' | 'black'; target_pairing_id: number }) =>
+      api.updatePairingBoardOrder(tournamentId, payload.pairingId, payload.side, payload.target_pairing_id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournament(tournamentId) });
+    },
+  });
+}
+
 export function useCloseRegistration(tournamentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -96,6 +108,17 @@ export function useAssignPlayer(tournamentId: string) {
     mutationFn: (payload: { player_id: number; team_id?: number | null; allow_late_join?: boolean }) => api.assignPlayer(tournamentId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournament(tournamentId) });
+    },
+  });
+}
+
+export function useRemovePlayer(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (playerId: number) => api.removePlayer(tournamentId, playerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournament(tournamentId) });
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournaments });
     },
   });
 }
@@ -134,6 +157,39 @@ export function useUploadBulletin(tournamentId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournament(tournamentId) });
       queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournaments });
+    },
+  });
+}
+
+export function usePublicTournamentRegistration(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: TournamentPublicRegistration) => api.registerToTournament(tournamentId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournaments });
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournament(tournamentId) });
+    },
+  });
+}
+
+export function useCreatePublicTeamRegistration(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: PublicTeamRegistrationCreate) => api.createPublicTeamRegistration(tournamentId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournaments });
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournament(tournamentId) });
+    },
+  });
+}
+
+export function useJoinPublicTeamRegistration(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: PublicTeamRegistrationJoin) => api.joinPublicTeamRegistration(tournamentId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournaments });
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournament(tournamentId) });
     },
   });
 }

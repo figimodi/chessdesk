@@ -1,16 +1,69 @@
 import type {
+  AuthToken,
+  EmailConfirmationRequest,
+  EmailConfirmationResendRequest,
   FidePlayer,
+  MessageResponse,
+  PasswordChangeRequest,
   Player,
+  PublicTeamRegistrationCreate,
+  PublicTeamRegistrationCreateResponse,
+  PublicTeamRegistrationJoin,
+  PublicRegistrationRequest,
   Team,
   TournamentCreate,
   TournamentDetail,
   TournamentListItem,
+  TournamentPublicRegistration,
   TournamentPlayer,
   TournamentUpdate,
+  User,
+  UserCreate,
+  UserUpdate,
 } from '@/api/types'
 import { customAxios } from '@/api/customClient'
 
 export const api = {
+  async login(payload: { username: string; password: string }) {
+    const response = await customAxios.post<AuthToken>('/api/v1/auth/login', payload)
+    return response.data
+  },
+  async register(payload: PublicRegistrationRequest) {
+    const response = await customAxios.post<MessageResponse>('/api/v1/auth/register', payload)
+    return response.data
+  },
+  async confirmEmail(payload: EmailConfirmationRequest) {
+    const response = await customAxios.post<MessageResponse>('/api/v1/auth/confirm-email', payload)
+    return response.data
+  },
+  async resendConfirmation(payload: EmailConfirmationResendRequest) {
+    const response = await customAxios.post<MessageResponse>('/api/v1/auth/resend-confirmation', payload)
+    return response.data
+  },
+  async getMe() {
+    const response = await customAxios.get<User>('/api/v1/auth/me')
+    return response.data
+  },
+  async changePassword(payload: PasswordChangeRequest) {
+    const response = await customAxios.post<User>('/api/v1/auth/change-password', payload)
+    return response.data
+  },
+  async listUsers() {
+    const response = await customAxios.get<User[]>('/api/v1/admin/users/')
+    return response.data
+  },
+  async createUser(payload: UserCreate) {
+    const response = await customAxios.post<User>('/api/v1/admin/users/', payload)
+    return response.data
+  },
+  async updateUser(userId: number, payload: UserUpdate) {
+    const response = await customAxios.patch<User>(`/api/v1/admin/users/${userId}`, payload)
+    return response.data
+  },
+  async deleteUser(userId: number) {
+    const response = await customAxios.delete<{ ok: boolean }>(`/api/v1/admin/users/${userId}`)
+    return response.data
+  },
   async listTournaments() {
     const response = await customAxios.get<TournamentListItem[]>('/api/v1/tournaments/')
     return response.data
@@ -39,6 +92,13 @@ export const api = {
     const response = await customAxios.patch(
       `/api/v1/admin/tournaments/${tournamentId}/pairings/results/${pairingId}`,
       { result }
+    )
+    return response.data
+  },
+  async updatePairingBoardOrder(tournamentId: string, pairingId: number, side: 'white' | 'black', target_pairing_id: number) {
+    const response = await customAxios.patch(
+      `/api/v1/admin/tournaments/${tournamentId}/pairings/board-order/${pairingId}`,
+      { side, target_pairing_id }
     )
     return response.data
   },
@@ -83,6 +143,12 @@ export const api = {
     const response = await customAxios.post<TournamentPlayer>(
       `/api/v1/admin/tournaments/${tournamentId}/players`,
       payload
+    )
+    return response.data
+  },
+  async removePlayer(tournamentId: string, playerId: number) {
+    const response = await customAxios.delete<{ ok: boolean }>(
+      `/api/v1/admin/tournaments/${tournamentId}/players/${playerId}`
     )
     return response.data
   },
@@ -159,5 +225,17 @@ export const api = {
       }
     )
     return response.data as { bulletinUrl: string }
+  },
+  async registerToTournament(tournamentId: string, payload: TournamentPublicRegistration) {
+    const response = await customAxios.post<TournamentPlayer>(`/api/v1/tournaments/${tournamentId}/register`, payload)
+    return response.data
+  },
+  async createPublicTeamRegistration(tournamentId: string, payload: PublicTeamRegistrationCreate) {
+    const response = await customAxios.post<PublicTeamRegistrationCreateResponse>(`/api/v1/tournaments/${tournamentId}/team-registration/create`, payload)
+    return response.data
+  },
+  async joinPublicTeamRegistration(tournamentId: string, payload: PublicTeamRegistrationJoin) {
+    const response = await customAxios.post<TournamentPlayer>(`/api/v1/tournaments/${tournamentId}/team-registration/join`, payload)
+    return response.data
   },
 }

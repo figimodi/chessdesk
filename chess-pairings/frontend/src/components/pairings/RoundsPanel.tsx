@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from "react";
+import { Trash2 } from "lucide-react";
 import type { Pairing, PairingResult, Round, StandingEntry, TournamentPlayer, TournamentType } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getFederationFlagUrl } from "@/lib/federationFlags";
 
 type Props = {
+  canManage: boolean;
   rounds: Round[];
   standings: StandingEntry[];
   players: TournamentPlayer[];
   tournamentType: TournamentType;
   category: string;
-  totalRounds: number;
   nextRoundNumber: number;
-  registrationClosed: boolean;
   canGenerateNextRound: boolean;
   onGenerateRound: () => void;
   showConcludeTournament: boolean;
@@ -23,19 +23,20 @@ type Props = {
   isGenerating?: boolean;
   isDeleting?: boolean;
   onResultChange: (pairingId: number, result: PairingResult, currentResult: PairingResult) => void;
+  onPairingBoardMove?: (pairingId: number, side: "white" | "black", target_pairing_id: number) => void;
+  canReorderTeamBoards?: boolean;
 };
 
 const results: PairingResult[] = ["1-0", "0-1", "1/2-1/2", "1-0F", "0-1F", "0F-0F", "1F-1F"];
 
 export function RoundsPanel({
+  canManage,
   rounds,
   standings,
   players,
   tournamentType,
   category,
-  totalRounds,
   nextRoundNumber,
-  registrationClosed,
   canGenerateNextRound,
   onGenerateRound,
   showConcludeTournament,
@@ -46,18 +47,18 @@ export function RoundsPanel({
   isGenerating = false,
   isDeleting = false,
   onResultChange,
+  onPairingBoardMove,
+  canReorderTeamBoards = false,
 }: Props) {
+  const isTeamLikeTournament = tournamentType === "team" || tournamentType === "quadriglia";
   const [selectedRoundId, setSelectedRoundId] = useState<number | null>(rounds[rounds.length - 1]?.id ?? null);
   const [expandedPairingId, setExpandedPairingId] = useState<number | null>(null);
+  const [dragState, setDragState] = useState<{ pairingId: number; side: "white" | "black" } | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setSelectedRoundId((current) => (rounds.some((round) => round.id === current) ? current : (rounds[rounds.length - 1]?.id ?? null)));
   }, [rounds]);
-
-  useEffect(() => {
-    setSelectedRoundId(rounds[rounds.length - 1]?.id ?? null);
-  }, [rounds.length]);
 
   useEffect(() => {
     setExpandedPairingId(null);
@@ -90,12 +91,16 @@ export function RoundsPanel({
           <CardTitle>Turni</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
-          <Button
-            onClick={showConcludeTournament ? onConcludeTournament : onGenerateRound}
-            disabled={isTournamentConcluded || !registrationClosed || (showConcludeTournament ? !canConcludeTournament : !canGenerateNextRound) || isGenerating}
-          >
-            {isGenerating ? roundActionPendingLabel : roundActionLabel}
-          </Button>
+          {canManage ? (
+            <Button
+              onClick={showConcludeTournament ? onConcludeTournament : onGenerateRound}
+              disabled={isTournamentConcluded || (showConcludeTournament ? !canConcludeTournament : !canGenerateNextRound) || isGenerating}
+            >
+              {isGenerating ? roundActionPendingLabel : roundActionLabel}
+            </Button>
+          ) : (
+            <div className="text-sm text-[var(--muted-foreground)]">Nessun turno ancora pubblicato.</div>
+          )}
         </CardContent>
       </Card>
     );
@@ -108,99 +113,114 @@ export function RoundsPanel({
           <CardTitle>Turni</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={selectedRoundIndex <= 0}
-              onClick={() => setSelectedRoundId(rounds[selectedRoundIndex - 1]?.id ?? null)}
-            >
-              Prec.
-            </Button>
-            <div className="min-w-24 text-center text-sm font-medium">Turno {selectedRound.number}</div>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={selectedRoundIndex >= rounds.length - 1}
-              onClick={() => setSelectedRoundId(rounds[selectedRoundIndex + 1]?.id ?? null)}
-            >
-              Succ.
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={showConcludeTournament ? onConcludeTournament : onGenerateRound}
-              disabled={isTournamentConcluded || !registrationClosed || (showConcludeTournament ? !canConcludeTournament : !canGenerateNextRound) || isGenerating}
-            >
-              {isGenerating ? roundActionPendingLabel : roundActionLabel}
-            </Button>
-            <Button variant="destructive" onClick={onDeleteLatestRound} disabled={!isLatestRoundSelected || isDeleting}>
-              {isDeleting ? "Eliminazione..." : `Elimina turno ${latestRound.number}`}
-            </Button>
-          </div>
-        </div>
-        <div className="space-y-3">
-              {tournamentType === "team"
-            ? renderTeamMatches({
-                pairings: selectedRound.pairings,
-                playersById,
-                standingsByPlayer,
-                category,
-                isLatestRoundSelected,
-                expandedPairingId,
-                setExpandedPairingId,
-                onResultChange,
-              })
-            : selectedRound.pairings.map((pairing) => {
-            const whitePlayer = playersById.get(pairing.white_player_id);
-            const blackPlayer = pairing.black_player_id ? playersById.get(pairing.black_player_id) : undefined;
-            const whiteStanding = standingsByPlayer.get(pairing.white_player_id);
-            const blackStanding = pairing.black_player_id ? standingsByPlayer.get(pairing.black_player_id) : undefined;
-
-            return (
-              <Card
-                key={pairing.id}
-                className={`border border-[var(--border)] ${isLatestRoundSelected && !pairing.is_bye ? "cursor-pointer" : "cursor-default"}`}
-                onClick={() => {
-                  if (!isLatestRoundSelected || pairing.is_bye) return;
-                  setExpandedPairingId((current) => (current === pairing.id ? null : pairing.id));
-                }}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={selectedRoundIndex <= 0}
+                onClick={() => setSelectedRoundId(rounds[selectedRoundIndex - 1]?.id ?? null)}
               >
-                <CardContent className="space-y-3 py-3">
-                  <div className="grid gap-2 lg:grid-cols-[56px_1fr_120px_1fr] lg:items-stretch">
-                    <div className="flex items-center justify-center rounded-xl border bg-[var(--muted)] text-sm font-semibold">
-                      {pairing.board_number}
-                    </div>
-                    <PlayerMatchCard player={whitePlayer} standing={whiteStanding} category={category} />
-                    <div className="flex items-center justify-center rounded-xl border bg-[var(--muted)] px-3 text-center text-sm font-semibold">
-                      {renderCompactResult(pairing)}
-                    </div>
-                    <PlayerMatchCard player={blackPlayer} standing={blackStanding} category={category} isBye={pairing.is_bye} />
-                  </div>
-                  {!pairing.is_bye && isLatestRoundSelected && expandedPairingId === pairing.id ? (
-                    <div className="flex flex-wrap justify-center gap-2 pt-1">
-                      {results.map((result) => (
-                        <Button
-                          key={result}
-                          variant={pairing.result === result ? "default" : "outline"}
-                          size="sm"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onResultChange(pairing.id, result, pairing.result);
-                            setExpandedPairingId(null);
-                          }}
-                        >
-                          {result}
-                        </Button>
-                      ))}
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                Prec.
+              </Button>
+              <div className="min-w-24 text-center text-sm font-medium">Turno {selectedRound.number}</div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={selectedRoundIndex >= rounds.length - 1}
+                onClick={() => setSelectedRoundId(rounds[selectedRoundIndex + 1]?.id ?? null)}
+              >
+                Succ.
+              </Button>
+            </div>
+            {canManage ? (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={showConcludeTournament ? onConcludeTournament : onGenerateRound}
+                  disabled={isTournamentConcluded || (showConcludeTournament ? !canConcludeTournament : !canGenerateNextRound) || isGenerating}
+                >
+                  {isGenerating ? roundActionPendingLabel : roundActionLabel}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="border bg-white text-slate-500 shadow-sm hover:bg-slate-50"
+                  aria-label={`Elimina turno ${latestRound.number}`}
+                  title={`Elimina turno ${latestRound.number}`}
+                  onClick={onDeleteLatestRound}
+                  disabled={!isLatestRoundSelected || isDeleting}
+                >
+                  {isDeleting ? "Eliminazione..." : <Trash2 className="h-4 w-4" />}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          <div className="space-y-3">
+            {isTeamLikeTournament
+              ? renderTeamMatches({
+                  pairings: selectedRound.pairings,
+                  playersById,
+                  standingsByPlayer,
+                  category,
+                  canManage,
+                  canReorderTeamBoards,
+                  isLatestRoundSelected,
+                  expandedPairingId,
+                  dragState,
+                  onPairingBoardMove,
+                  setDragState,
+                  setExpandedPairingId,
+                  onResultChange,
+                  tournamentType,
+                })
+              : selectedRound.pairings.map((pairing) => {
+                  const whitePlayer = playersById.get(pairing.white_player_id);
+                  const blackPlayer = pairing.black_player_id ? playersById.get(pairing.black_player_id) : undefined;
+                  const whiteStanding = standingsByPlayer.get(pairing.white_player_id);
+                  const blackStanding = pairing.black_player_id ? standingsByPlayer.get(pairing.black_player_id) : undefined;
+
+                  return (
+                    <Card
+                      key={pairing.id}
+                      className={`border border-[var(--border)] ${canManage && isLatestRoundSelected && !pairing.is_bye ? "cursor-pointer" : "cursor-default"}`}
+                      onClick={() => {
+                        if (!canManage || !isLatestRoundSelected || pairing.is_bye) return;
+                        setExpandedPairingId((current) => (current === pairing.id ? null : pairing.id));
+                      }}
+                    >
+                      <CardContent className="space-y-3 py-3">
+                        <div className="grid gap-2 lg:grid-cols-[56px_1fr_120px_1fr] lg:items-stretch">
+                          <div className="flex items-center justify-center rounded-xl border bg-[var(--muted)] text-sm font-semibold">
+                            {pairing.board_number}
+                          </div>
+                          <PlayerMatchCard player={whitePlayer} standing={whiteStanding} category={category} />
+                          <div className="flex items-center justify-center rounded-xl border bg-[var(--muted)] px-3 text-center text-sm font-semibold">
+                            {renderCompactResult(pairing)}
+                          </div>
+                          <PlayerMatchCard player={blackPlayer} standing={blackStanding} category={category} isBye={pairing.is_bye} />
+                        </div>
+                        {!pairing.is_bye && canManage && isLatestRoundSelected && expandedPairingId === pairing.id ? (
+                          <div className="flex flex-wrap justify-center gap-2 pt-1">
+                            {results.map((result) => (
+                              <Button
+                                key={result}
+                                variant={pairing.result === result ? "default" : "outline"}
+                                size="sm"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onResultChange(pairing.id, result, pairing.result);
+                                  setExpandedPairingId(null);
+                                }}
+                              >
+                                {result}
+                              </Button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -239,7 +259,9 @@ function PlayerMatchCard({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             {pieceColor ? (
-              <span className={`h-3 w-3 rounded-sm border ${pieceColor === "white" ? "border-slate-400 bg-white" : "border-slate-700 bg-slate-900"}`} />
+              <span
+                className={`h-3 w-3 rounded-sm border ${pieceColor === "white" ? "border-slate-400 bg-white" : "border-slate-700 bg-slate-900"}`}
+              />
             ) : null}
             <div className="truncate text-sm font-semibold">{player.full_name}</div>
           </div>
@@ -262,9 +284,9 @@ function PlayerMatchCard({
 }
 
 function FederationFlag({ federation }: { federation?: string | null }) {
-  const countryCode = getFederationFlagUrl(federation);
-  if (!countryCode) return null;
-  return <span className={`fi fi-${countryCode} fis rounded-sm`} />;
+  const flagUrl = getFederationFlagUrl(federation);
+  if (!flagUrl) return null;
+  return <img alt={federation ?? "Federation"} className="h-4 w-5 rounded-sm object-cover" src={flagUrl} />;
 }
 
 function renderCompactResult(pairing: { result: PairingResult; is_bye: boolean }) {
@@ -284,19 +306,31 @@ function renderTeamMatches({
   playersById,
   standingsByPlayer,
   category,
+  canManage,
+  canReorderTeamBoards,
   isLatestRoundSelected,
   expandedPairingId,
+  dragState,
+  onPairingBoardMove,
+  setDragState,
   setExpandedPairingId,
   onResultChange,
+  tournamentType,
 }: {
   pairings: Pairing[];
   playersById: Map<number, TournamentPlayer>;
   standingsByPlayer: Map<number, StandingEntry>;
   category: string;
+  canManage: boolean;
+  canReorderTeamBoards: boolean;
   isLatestRoundSelected: boolean;
   expandedPairingId: number | null;
+  dragState: { pairingId: number; side: "white" | "black" } | null;
+  onPairingBoardMove?: (pairingId: number, side: "white" | "black", target_pairing_id: number) => void;
+  setDragState: (value: { pairingId: number; side: "white" | "black" } | null) => void;
   setExpandedPairingId: (value: number | null | ((current: number | null) => number | null)) => void;
   onResultChange: (pairingId: number, result: PairingResult, currentResult: PairingResult) => void;
+  tournamentType: TournamentType;
 }) {
   const matches = new Map<number, Pairing[]>();
   pairings.forEach((pairing) => {
@@ -307,75 +341,158 @@ function renderTeamMatches({
   return Array.from(matches.entries())
     .sort((left, right) => left[0] - right[0])
     .map(([matchNumber, matchPairings]) => {
-    const sortedPairings = [...matchPairings].sort((left, right) => left.board_number - right.board_number);
-    const whiteTeamName = sortedPairings[0]?.white_team_name ?? "Squadra A";
-    const blackTeamName = sortedPairings[0]?.black_team_name ?? "Squadra B";
-    const whiteScore = sortedPairings.reduce((total, pairing) => total + pairing.white_points, 0);
-    const blackScore = sortedPairings.reduce((total, pairing) => total + pairing.black_points, 0);
+      const sortedPairings = [...matchPairings].sort((left, right) => left.board_number - right.board_number);
+      const isQuadriglia = tournamentType === "quadriglia";
+      const canReorderMatch =
+        canManage && canReorderTeamBoards && isLatestRoundSelected && sortedPairings.every((pairing) => pairing.result === "unplayed");
+      const whiteTeamName = sortedPairings[0]?.white_team_name ?? "Squadra A";
+      const blackTeamName = sortedPairings[0]?.black_team_name ?? "Squadra B";
+      const whiteScore = sortedPairings.reduce((total, pairing) => total + pairing.white_points, 0);
+      const blackScore = sortedPairings.reduce((total, pairing) => total + pairing.black_points, 0);
 
-    return (
-      <Card key={matchNumber} className="border border-[var(--border)]">
-        <CardContent className="py-4">
-          <div className="grid gap-3 lg:grid-cols-[56px_1fr] lg:items-stretch">
-            <div className="flex h-full items-center justify-center self-stretch rounded-xl border bg-[var(--muted)] text-sm font-semibold">
-              {matchNumber}
-            </div>
-            <div className="space-y-3">
-              <div className="rounded-xl border bg-[var(--muted)] px-4 py-3 text-center text-base font-semibold">
-                <div className="grid gap-3 lg:grid-cols-[1.4fr_180px_1.4fr] lg:items-stretch">
-                  <div className="rounded-xl border bg-white px-3 py-3 shadow-sm text-left">{whiteTeamName}</div>
-                  <div className="flex items-center justify-center rounded-xl border bg-[var(--muted)] px-3 py-3 text-center">
-                    {formatScore(whiteScore)} - {formatScore(blackScore)}
-                  </div>
-                  <div className="rounded-xl border bg-white px-3 py-3 shadow-sm text-right">{blackTeamName}</div>
-                </div>
+      return (
+        <Card key={matchNumber} className="border border-[var(--border)]">
+          <CardContent className="py-4">
+            <div className="grid gap-3 lg:grid-cols-[56px_1fr] lg:items-stretch">
+              <div className="flex h-full items-center justify-center self-stretch rounded-xl border bg-[var(--muted)] text-sm font-semibold">
+                {matchNumber}
               </div>
-              {sortedPairings.map((pairing) => {
-                const whitePlayer = playersById.get(pairing.white_player_id);
-                const whiteStanding = standingsByPlayer.get(pairing.white_player_id);
-                const blackPlayer = pairing.black_player_id ? playersById.get(pairing.black_player_id) : undefined;
-                const blackStanding = pairing.black_player_id ? standingsByPlayer.get(pairing.black_player_id) : undefined;
-
-                return (
-                  <div key={pairing.id} className="grid gap-3 lg:grid-cols-[1.4fr_180px_1.4fr] lg:items-stretch">
-                    <PlayerMatchCard player={whitePlayer} standing={whiteStanding} category={category} pieceColor={pairing.board_number % 2 === 1 ? "white" : "black"} />
+              <div className="space-y-3">
+                <div className="rounded-xl border bg-[var(--muted)] px-4 py-3 text-center text-base font-semibold">
+                  <div className="grid gap-3 lg:grid-cols-[1.4fr_180px_1.4fr] lg:items-stretch">
+                    <div className="rounded-xl border bg-white px-3 py-3 shadow-sm text-left">{whiteTeamName}</div>
                     <div
-                      className={`rounded-xl border bg-[var(--muted)] px-3 py-3 text-center ${!pairing.is_bye && isLatestRoundSelected ? "cursor-pointer" : "cursor-default"}`}
+                      className={`flex items-center justify-center rounded-xl border bg-[var(--muted)] px-3 py-3 text-center ${isQuadriglia && isLatestRoundSelected ? "cursor-pointer" : ""}`}
                       onClick={() => {
-                        if (!isLatestRoundSelected || pairing.is_bye) return;
-                        setExpandedPairingId((current) => (current === pairing.id ? null : pairing.id));
+                        if (!isQuadriglia || !isLatestRoundSelected) return;
+                        setExpandedPairingId((current) => (current === sortedPairings[0]?.id ? null : (sortedPairings[0]?.id ?? null)));
                       }}
                     >
-                      <div className="text-base font-semibold">{renderCompactResult(pairing)}</div>
-                      {!pairing.is_bye && isLatestRoundSelected && expandedPairingId === pairing.id ? (
-                        <div className="mt-2 flex flex-wrap justify-center gap-1">
-                          {results.map((result) => (
-                            <Button
-                              key={result}
-                              variant={pairing.result === result ? "default" : "outline"}
-                              size="sm"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onResultChange(pairing.id, result, pairing.result);
-                                setExpandedPairingId(null);
-                              }}
-                            >
-                              {result}
-                            </Button>
-                          ))}
+                      <div>
+                        <div>
+                          {formatScore(whiteScore)} - {formatScore(blackScore)}
                         </div>
-                      ) : null}
+                        {isQuadriglia && isLatestRoundSelected && expandedPairingId === sortedPairings[0]?.id ? (
+                          <div className="mt-2 flex flex-wrap justify-center gap-1">
+                            {results
+                              .filter((result) => result === "1-0" || result === "0-1" || result === "1/2-1/2")
+                              .map((result) => (
+                                <Button
+                                  key={result}
+                                  variant={sortedPairings[0]?.result === result ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    onResultChange(sortedPairings[0].id, result, sortedPairings[0].result);
+                                    setExpandedPairingId(null);
+                                  }}
+                                >
+                                  {result}
+                                </Button>
+                              ))}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                    <PlayerMatchCard player={blackPlayer} standing={blackStanding} category={category} isBye={pairing.is_bye} pieceColor={pairing.board_number % 2 === 1 ? "black" : "white"} />
+                    <div className="rounded-xl border bg-white px-3 py-3 shadow-sm text-right">{blackTeamName}</div>
                   </div>
-                );
-              })}
+                </div>
+                {canReorderMatch ? (
+                  <div className="text-xs text-[var(--muted-foreground)]">Trascina le schede giocatore per cambiare l'ordine di scacchiera.</div>
+                ) : null}
+                {sortedPairings.map((pairing) => {
+                  const whitePlayer = playersById.get(pairing.white_player_id);
+                  const whiteStanding = standingsByPlayer.get(pairing.white_player_id);
+                  const blackPlayer = pairing.black_player_id ? playersById.get(pairing.black_player_id) : undefined;
+                  const blackStanding = pairing.black_player_id ? standingsByPlayer.get(pairing.black_player_id) : undefined;
+
+                  return (
+                    <div key={pairing.id} className="grid gap-3 lg:grid-cols-[1.4fr_180px_1.4fr] lg:items-stretch">
+                      <div
+                        className={canReorderMatch ? "cursor-grab active:cursor-grabbing" : ""}
+                        draggable={canReorderMatch}
+                        onDragStart={() => canReorderMatch && setDragState({ pairingId: pairing.id, side: "white" })}
+                        onDragEnd={() => setDragState(null)}
+                        onDragOver={(event) => {
+                          if (!canReorderMatch || !dragState || dragState.side !== "white" || dragState.pairingId === pairing.id) return;
+                          event.preventDefault();
+                        }}
+                        onDrop={(event) => {
+                          if (!canReorderMatch || !dragState || dragState.side !== "white" || dragState.pairingId === pairing.id) return;
+                          event.preventDefault();
+                          onPairingBoardMove?.(dragState.pairingId, "white", pairing.id);
+                          setDragState(null);
+                        }}
+                      >
+                        <PlayerMatchCard
+                          player={whitePlayer}
+                          standing={whiteStanding}
+                          category={category}
+                          pieceColor={pairing.board_number % 2 === 1 ? "white" : "black"}
+                        />
+                      </div>
+                      <div
+                        className={`rounded-xl border bg-[var(--muted)] px-3 py-3 text-center ${!isQuadriglia && !pairing.is_bye && isLatestRoundSelected ? "cursor-pointer" : "cursor-default"}`}
+                        onClick={() => {
+                          if (isQuadriglia || !isLatestRoundSelected || pairing.is_bye) return;
+                          setExpandedPairingId((current) => (current === pairing.id ? null : pairing.id));
+                        }}
+                      >
+                        <div className="text-base font-semibold">
+                          {isQuadriglia ? `Scacchiera ${pairing.board_number}` : renderCompactResult(pairing)}
+                        </div>
+                        {!isQuadriglia && !pairing.is_bye && isLatestRoundSelected && expandedPairingId === pairing.id ? (
+                          <div className="mt-2 flex flex-wrap justify-center gap-1">
+                            {results.map((result) => (
+                              <Button
+                                key={result}
+                                variant={pairing.result === result ? "default" : "outline"}
+                                size="sm"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onResultChange(pairing.id, result, pairing.result);
+                                  setExpandedPairingId(null);
+                                }}
+                              >
+                                {result}
+                              </Button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div
+                        className={canReorderMatch ? "cursor-grab active:cursor-grabbing" : ""}
+                        draggable={canReorderMatch}
+                        onDragStart={() => canReorderMatch && setDragState({ pairingId: pairing.id, side: "black" })}
+                        onDragEnd={() => setDragState(null)}
+                        onDragOver={(event) => {
+                          if (!canReorderMatch || !dragState || dragState.side !== "black" || dragState.pairingId === pairing.id) return;
+                          event.preventDefault();
+                        }}
+                        onDrop={(event) => {
+                          if (!canReorderMatch || !dragState || dragState.side !== "black" || dragState.pairingId === pairing.id) return;
+                          event.preventDefault();
+                          onPairingBoardMove?.(dragState.pairingId, "black", pairing.id);
+                          setDragState(null);
+                        }}
+                      >
+                        <PlayerMatchCard
+                          player={blackPlayer}
+                          standing={blackStanding}
+                          category={category}
+                          isBye={pairing.is_bye}
+                          pieceColor={pairing.board_number % 2 === 1 ? "black" : "white"}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  });
+          </CardContent>
+        </Card>
+      );
+    });
 }
 
 function formatScore(value: number) {
