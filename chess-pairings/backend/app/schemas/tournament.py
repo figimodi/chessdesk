@@ -22,6 +22,7 @@ ALLOWED_TIE_BREAKS = {
 
 INDIVIDUAL_DEFAULT_TIE_BREAKS = ["buchholz_cut1", "buchholz", "sonneborn_berger"]
 TEAM_DEFAULT_TIE_BREAKS = ["individual_points", "head_to_head", "weighted_sonneborn"]
+QUADRIGLIA_DEFAULT_TIE_BREAKS = ["head_to_head"]
 
 
 class TournamentBase(ORMModel):
@@ -86,7 +87,7 @@ class TournamentBase(ORMModel):
 
     @model_validator(mode="after")
     def validate_team_settings(self):
-        if self.type != TournamentType.team:
+        if self.type not in (TournamentType.team, TournamentType.quadriglia):
             return self
 
         required_values = {
@@ -99,6 +100,12 @@ class TournamentBase(ORMModel):
         missing = [key for key, value in required_values.items() if value is None]
         if missing:
             raise ValueError(f"Missing team tournament settings: {', '.join(missing)}")
+        if self.type == TournamentType.quadriglia:
+            if self.max_players_per_team != 2 or self.boards_per_match != 2:
+                raise ValueError("Nei tornei Quadriglia ci devono essere esattamente 2 giocatori per squadra in ogni incontro.")
+            if any(item != "head_to_head" for item in self.tie_breaks):
+                raise ValueError("Nel tipo Quadriglia e consentito solo lo spareggio head_to_head.")
+            return self
         if self.max_players_per_team < self.boards_per_match:
             raise ValueError("max_players_per_team must be greater than or equal to boards_per_match")
         return self

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp } from "lucide-react";
 import type { Team, TournamentPlayer } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Item, ItemActions, ItemContent } from "@/components/ui/item";
 import { getFederationFlagUrl } from "@/lib/federationFlags";
 
 type Props = {
@@ -105,25 +105,19 @@ export function TeamsPanel({
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
         <div className="space-y-4">
+          {canManage ? <div className="text-xs text-[var(--muted-foreground)]">Trascina i giocatori per riordinarli o spostarli tra le squadre.</div> : null}
           {sortedTeams.map((team) => (
             <TeamRosterCard
               key={team.id}
+              canManage={canManage}
               team={team}
               category={category}
-              onOpen={() => setSelectedTeamId(team.id)}
-              canManage={canManage}
-              onDropPlayer={(payload) => {
-                if (payload.kind === "team-member" && payload.fromTeamId === team.id) return;
-                if (payload.kind === "team-member" && payload.fromTeamId !== team.id) {
-                  onAssignMember(team.id, payload.playerId);
-                  return;
-                }
-                onAssignMember(team.id, payload.playerId);
-              }}
-              onRemoveMember={onRemoveMember}
-              onReorderMembers={onReorderMembers}
-              setDragPayload={setDragPayload}
               dragPayload={dragPayload}
+              onOpen={() => setSelectedTeamId(team.id)}
+              onAssignMember={onAssignMember}
+              onReorderMembers={onReorderMembers}
+              onRemoveMember={onRemoveMember}
+              setDragPayload={setDragPayload}
             />
           ))}
           {!sortedTeams.length ? (
@@ -134,9 +128,10 @@ export function TeamsPanel({
         </div>
 
         <Card
-          className="xl:sticky xl:top-4 self-start"
+          className="self-start xl:sticky xl:top-4"
           onDragOver={(event) => {
-            if (canManage) event.preventDefault();
+            if (!canManage || !dragPayload) return;
+            event.preventDefault();
           }}
           onDrop={() => {
             if (!canManage || !dragPayload || dragPayload.kind !== "team-member") return;
@@ -151,6 +146,7 @@ export function TeamsPanel({
             {paginatedUnassignedPlayers.map((player) => (
               <DraggablePlayerRow
                 key={player.player_id}
+                className={dragPayload?.playerId === player.player_id ? "opacity-60" : ""}
                 label={player.full_name}
                 seedNumber={player.seed_number}
                 federation={player.federation}
@@ -168,20 +164,10 @@ export function TeamsPanel({
                   Pagina {safePage} di {totalPages}
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={safePage <= 1}
-                    onClick={() => setUnassignedPage((current) => Math.max(1, current - 1))}
-                  >
+                  <Button variant="outline" size="sm" disabled={safePage <= 1} onClick={() => setUnassignedPage((current) => Math.max(1, current - 1))}>
                     Prec.
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={safePage >= totalPages}
-                    onClick={() => setUnassignedPage((current) => Math.min(totalPages, current + 1))}
-                  >
+                  <Button variant="outline" size="sm" disabled={safePage >= totalPages} onClick={() => setUnassignedPage((current) => Math.min(totalPages, current + 1))}>
                     Succ.
                   </Button>
                 </div>
@@ -198,22 +184,22 @@ function TeamRosterCard({
   canManage,
   team,
   category,
-  onOpen,
-  onDropPlayer,
-  onRemoveMember,
-  onReorderMembers,
-  setDragPayload,
   dragPayload,
+  onOpen,
+  onAssignMember,
+  onReorderMembers,
+  onRemoveMember,
+  setDragPayload,
 }: {
   canManage: boolean;
   team: Team;
   category: string;
-  onOpen: () => void;
-  onDropPlayer: (payload: DragPayload) => void;
-  onRemoveMember: (teamId: number, playerId: number) => void;
-  onReorderMembers: (teamId: number, playerIds: number[]) => void;
-  setDragPayload: (payload: DragPayload | null) => void;
   dragPayload: DragPayload | null;
+  onOpen: () => void;
+  onAssignMember: (teamId: number, playerId: number) => void;
+  onReorderMembers: (teamId: number, playerIds: number[]) => void;
+  onRemoveMember: (teamId: number, playerId: number) => void;
+  setDragPayload: (payload: DragPayload | null) => void;
 }) {
   const averageRating = computeAverageRating(team, category);
   const highestRating = computeHighestRating(team, category);
@@ -223,11 +209,13 @@ function TeamRosterCard({
       className={canManage ? "cursor-pointer" : "cursor-default"}
       onClick={onOpen}
       onDragOver={(event) => {
-        if (canManage) event.preventDefault();
+        if (!canManage || !dragPayload) return;
+        event.preventDefault();
       }}
       onDrop={() => {
         if (!canManage || !dragPayload) return;
-        onDropPlayer(dragPayload);
+        if (dragPayload.kind === "team-member" && dragPayload.fromTeamId === team.id) return;
+        onAssignMember(team.id, dragPayload.playerId);
         setDragPayload(null);
       }}
     >
@@ -244,51 +232,61 @@ function TeamRosterCard({
       </CardHeader>
       <CardContent className="space-y-2" onClick={(event) => event.stopPropagation()}>
         {team.members.map((member, index) => (
-          <div key={member.player_id} className="flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm">
-            <div className="w-8 font-medium">{member.team_board_order ?? index + 1}</div>
-            <DraggablePlayerRow
-              className="flex-1 border-0 p-0"
-              label={member.full_name}
-              seedNumber={member.seed_number}
-              federation={member.federation}
-              rating={getTeamMemberRating(member, category)}
-              birthYear={member.birth_year}
-              draggable={canManage}
-              onDragStart={() => setDragPayload({ kind: "team-member", playerId: member.player_id, fromTeamId: team.id })}
-              onDragEnd={() => setDragPayload(null)}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!canManage || index === 0}
-              onClick={() => {
-                if (index === 0) return;
-                const next = [...team.members.map((item) => item.player_id)];
-                [next[index - 1], next[index]] = [next[index], next[index - 1]];
-                onReorderMembers(team.id, next);
-              }}
-            >
-              <ArrowUp className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!canManage || index === team.members.length - 1}
-              onClick={() => {
-                if (index === team.members.length - 1) return;
-                const next = [...team.members.map((item) => item.player_id)];
-                [next[index], next[index + 1]] = [next[index + 1], next[index]];
-                onReorderMembers(team.id, next);
-              }}
-            >
-              <ArrowDown className="h-4 w-4" />
-            </Button>
-            {canManage ? (
-              <Button variant="destructive" size="sm" onClick={() => onRemoveMember(team.id, member.player_id)}>
-                Rimuovi
-              </Button>
-            ) : null}
-          </div>
+          <Item
+            key={member.player_id}
+            className={dragPayload?.playerId === member.player_id ? "opacity-60" : ""}
+            draggable={canManage}
+            onDragStart={() => setDragPayload({ kind: "team-member", playerId: member.player_id, fromTeamId: team.id })}
+            onDragEnd={() => setDragPayload(null)}
+            onDragOver={(event) => {
+              if (!canManage || !dragPayload) return;
+              event.preventDefault();
+            }}
+            onDrop={() => {
+              if (!canManage || !dragPayload) return;
+
+              if (dragPayload.kind === "team-member" && dragPayload.fromTeamId === team.id) {
+                if (dragPayload.playerId === member.player_id) return;
+
+                const orderedIds = team.members.map((entry) => entry.player_id);
+                const fromIndex = orderedIds.indexOf(dragPayload.playerId);
+                const toIndex = orderedIds.indexOf(member.player_id);
+                if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+
+                const reordered = [...orderedIds];
+                const [moved] = reordered.splice(fromIndex, 1);
+                reordered.splice(toIndex, 0, moved);
+                onReorderMembers(team.id, reordered);
+                setDragPayload(null);
+                return;
+              }
+
+              onAssignMember(team.id, dragPayload.playerId);
+              setDragPayload(null);
+            }}
+          >
+            <ItemContent className="flex items-center gap-2">
+              <div className="w-8 font-medium">{member.team_board_order ?? index + 1}</div>
+              <DraggablePlayerRow
+                className="flex-1 border-0 p-0"
+                label={member.full_name}
+                seedNumber={member.seed_number}
+                federation={member.federation}
+                rating={getTeamMemberRating(member, category)}
+                birthYear={member.birth_year}
+                draggable={false}
+                onDragStart={() => undefined}
+                onDragEnd={() => undefined}
+              />
+            </ItemContent>
+            <ItemActions>
+              {canManage ? (
+                <Button variant="destructive" size="sm" onClick={() => onRemoveMember(team.id, member.player_id)}>
+                  Rimuovi
+                </Button>
+              ) : null}
+            </ItemActions>
+          </Item>
         ))}
         {!team.members.length ? (
           <div className="text-sm text-[var(--muted-foreground)]">Trascina qui i giocatori dalla colonna di destra.</div>

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 type TournamentHeroCardProps = {
   name: string;
   description?: string | null;
-  type: "individual" | "team";
+  type: "individual" | "team" | "quadriglia";
   isPrivate: boolean;
   isOwner: boolean;
   isEloRated: boolean;
@@ -56,8 +56,8 @@ export function TournamentHeroCard({
             <InfoChip icon={<ChartColumn className="h-4 w-4" />} label={isEloRated ? "Variazione Elo" : "No variazione Elo"} />
             <InfoChip icon={timeControlIcon(timeControlCategory)} label={timeControl} />
             <InfoChip
-              icon={type === "team" ? <Users className="h-4 w-4" /> : <User className="h-4 w-4" />}
-              label={`${type === "team" ? "Squadre" : "Individuale"} (${participantsLabel})`}
+              icon={type === "team" || type === "quadriglia" ? <Users className="h-4 w-4" /> : <User className="h-4 w-4" />}
+              label={`${type === "team" ? "Squadre" : type === "quadriglia" ? "Quadriglia" : "Individuale"} (${participantsLabel})`}
             />
             <InfoChip icon={<Hash className="h-4 w-4" />} label={roundsLabel} />
           </div>

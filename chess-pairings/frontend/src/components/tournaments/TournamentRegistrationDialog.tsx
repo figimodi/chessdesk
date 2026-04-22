@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { isAxiosError } from "axios";
-import { ArrowDown, ArrowUp, Search, Trash2, UserPlus } from "lucide-react";
+import { Search, Trash2, UserPlus } from "lucide-react";
 import { useFideSearch } from "@/api/hooks/players";
 import {
   useCreatePublicTeamRegistration,
@@ -16,9 +16,11 @@ import type {
   TournamentPublicRegistration,
 } from "@/api/types";
 import { getFederationFlagUrl } from "@/lib/federationFlags";
+import { ReorderList } from "@/components/ui/reorder-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -46,13 +48,13 @@ export function TournamentRegistrationDialog({ onClose, tournament }: Props) {
         <CardHeader>
           <CardTitle>Iscriviti a {tournament.name}</CardTitle>
           <CardDescription>
-            {tournamentDetail?.type === "team"
+            {tournamentDetail?.type === "team" || tournamentDetail?.type === "quadriglia"
               ? "Per i tornei a squadre puoi creare una nuova squadra, unirti con PIN o iscriverti senza squadra."
               : "Puoi cercarti nel catalogo FIDE oppure inserirti manualmente. Se ti inserisci manualmente partirai con rating 1399."}
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-y-auto">
-          {tournamentDetail?.type === "team" ? (
+          {tournamentDetail?.type === "team" || tournamentDetail?.type === "quadriglia" ? (
             <TeamTournamentRegistrationContent onClose={onClose} tournament={tournamentDetail} />
           ) : (
             <IndividualTournamentRegistrationContent onClose={onClose} tournament={tournament} />
@@ -241,17 +243,6 @@ function TeamTournamentRegistrationContent({ onClose, tournament }: { onClose: (
     setCaptainMemberId((current) => (current === id ? null : current));
   }
 
-  function moveTeammate(id: string, direction: -1 | 1) {
-    setTeammates((current) => {
-      const index = current.findIndex((entry) => entry.id === id);
-      const nextIndex = index + direction;
-      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
-      const clone = [...current];
-      [clone[index], clone[nextIndex]] = [clone[nextIndex], clone[index]];
-      return clone;
-    });
-  }
-
   async function handleCreateTeam() {
     const captain = teammates.find((entry) => entry.id === captainMemberId);
     if (!captain) return;
@@ -413,17 +404,24 @@ function TeamTournamentRegistrationContent({ onClose, tournament }: { onClose: (
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="space-y-2">
-                {teammates.map((teammate, index) => (
-                  <RosterRow
-                    key={teammate.id}
-                    isCaptain={captainMemberId === teammate.id}
-                    label={teammate.label}
-                    onMoveDown={index < teammates.length - 1 ? () => moveTeammate(teammate.id, 1) : undefined}
-                    onMoveUp={index > 0 ? () => moveTeammate(teammate.id, -1) : undefined}
-                    onRemove={() => removeTeammate(teammate.id)}
-                    onSetCaptain={() => setCaptainMemberId(teammate.id)}
-                  />
-                ))}
+                <div className="text-xs text-[var(--muted-foreground)]">Trascina i membri per riordinare la composizione della squadra.</div>
+                <ReorderList
+                  className="space-y-2"
+                  itemClassName="rounded-xl"
+                  onReorderFinish={(_newOrder, orderIds) => {
+                    setTeammates(orderIds.map((id) => teammates.find((entry) => String(entry.id) === id)!).filter(Boolean));
+                  }}
+                >
+                  {teammates.map((teammate) => (
+                    <RosterRow
+                      key={teammate.id}
+                      isCaptain={captainMemberId === teammate.id}
+                      label={teammate.label}
+                      onRemove={() => removeTeammate(teammate.id)}
+                      onSetCaptain={() => setCaptainMemberId(teammate.id)}
+                    />
+                  )) as ReactElement[]}
+                </ReorderList>
                 {!teammates.length ? <div className="text-sm text-[var(--muted-foreground)]">Nessun membro aggiunto alla squadra.</div> : null}
               </div>
             </CardContent>
@@ -610,38 +608,24 @@ function IdentityCard({
 function RosterRow({
   isCaptain = false,
   label,
-  onMoveDown,
-  onMoveUp,
   onRemove,
   onSetCaptain,
 }: {
   isCaptain?: boolean;
   label: string;
-  onMoveDown?: () => void;
-  onMoveUp?: () => void;
   onRemove?: () => void;
   onSetCaptain?: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border bg-white px-3 py-2 text-sm">
-      <div className="flex items-center gap-2">
+    <Item>
+      <ItemContent className="flex items-center gap-2">
         {isCaptain ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium">Capitano</span> : null}
-        <span>{label}</span>
-      </div>
-      <div className="flex gap-2">
+        <ItemTitle>{label}</ItemTitle>
+      </ItemContent>
+      <ItemActions>
         {onSetCaptain && !isCaptain ? (
           <Button onClick={onSetCaptain} size="sm" type="button" variant="outline">
             Capitano
-          </Button>
-        ) : null}
-        {onMoveUp ? (
-          <Button onClick={onMoveUp} size="sm" type="button" variant="outline">
-            <ArrowUp className="h-4 w-4" />
-          </Button>
-        ) : null}
-        {onMoveDown ? (
-          <Button onClick={onMoveDown} size="sm" type="button" variant="outline">
-            <ArrowDown className="h-4 w-4" />
           </Button>
         ) : null}
         {onRemove ? (
@@ -649,8 +633,8 @@ function RosterRow({
             <Trash2 className="h-4 w-4" />
           </Button>
         ) : null}
-      </div>
-    </div>
+      </ItemActions>
+    </Item>
   );
 }
 

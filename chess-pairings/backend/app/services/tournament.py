@@ -64,7 +64,7 @@ def _detail_options():
 
 def _apply_tournament_scope(statement, user: User):
     if user.role == UserRole.admin:
-        return statement.where((Tournament.is_private.is_(False)) | (Tournament.owner_id == user.id))
+        return statement
     return statement.where(Tournament.owner_id == user.id)
 
 
@@ -81,8 +81,6 @@ def can_view_tournament(tournament: Tournament, user: User | None) -> bool:
 def can_manage_tournament(tournament: Tournament, user: User | None) -> bool:
     if user is None:
         return False
-    if tournament.is_private:
-        return tournament.owner_id == user.id
     return user.role == UserRole.admin or tournament.owner_id == user.id
 
 
@@ -129,13 +127,16 @@ async def get_tournament(db: AsyncSession, tournament_id: int, user: User) -> To
 
 async def create_tournament(db: AsyncSession, data: TournamentCreate, owner: User) -> Tournament:
     payload = data.model_dump(exclude={"round_schedule", "tie_breaks"})
-    if data.type == "team":
+    if data.type in ("team", "quadriglia"):
         if payload.get("match_points_win") is None:
             payload["match_points_win"] = 2
         if payload.get("match_points_draw") is None:
             payload["match_points_draw"] = 1
         if payload.get("match_points_loss") is None:
             payload["match_points_loss"] = 0
+        if data.type == "quadriglia":
+            payload["max_players_per_team"] = 2
+            payload["boards_per_match"] = 2
         _validate_team_tournament_limits(
             max_players_per_team=data.max_players_per_team,
             boards_per_match=data.boards_per_match,
@@ -174,7 +175,12 @@ async def update_tournament(
     next_max_players_per_team = data.max_players_per_team if data.max_players_per_team is not None else tournament.max_players_per_team
     next_boards_per_match = data.boards_per_match if data.boards_per_match is not None else tournament.boards_per_match
     existing_team_member_counts = [len(team.members) for team in tournament.teams]
-    if (data.type or tournament.type) == "team":
+    if (data.type or tournament.type) in ("team", "quadriglia"):
+        if (data.type or tournament.type) == "quadriglia":
+            payload["max_players_per_team"] = 2
+            payload["boards_per_match"] = 2
+            if data.tie_breaks is not None:
+                data.tie_breaks = ["head_to_head"]
         _validate_team_tournament_limits(
             max_players_per_team=next_max_players_per_team,
             boards_per_match=next_boards_per_match,
@@ -463,7 +469,7 @@ async def join_public_team(
 
 
 def _ensure_public_team_registration_allowed(tournament: Tournament) -> None:
-    if tournament.type != "team":
+    if tournament.type.value not in ("team", "quadriglia"):
         raise HTTPException(status_code=409, detail="Questa funzionalita e disponibile solo per i tornei a squadre")
     if tournament.is_registration_closed:
         raise HTTPException(status_code=409, detail="Tournament registration is closed")
@@ -550,7 +556,7 @@ async def close_registration(db: AsyncSession, tournament: Tournament) -> Tourna
     if tournament.is_registration_closed:
         return tournament
 
-    participants_count = len(tournament.teams) if tournament.type == "team" else len(tournament.players)
+    participants_count = len(tournament.teams) if tournament.type in ("team", "quadriglia") else len(tournament.players)
     if participants_count < 2:
         raise HTTPException(
             status_code=409,
@@ -559,7 +565,7 @@ async def close_registration(db: AsyncSession, tournament: Tournament) -> Tourna
 
     max_supported_rounds = max(participants_count - 1, 0)
     if tournament.rounds_count > max_supported_rounds:
-        label = "squadre" if tournament.type == "team" else "giocatori"
+        label = "squadre" if tournament.type in ("team", "quadriglia") else "giocatori"
         raise HTTPException(
             status_code=409,
             detail=(
@@ -712,7 +718,7 @@ def serialize_round(round_model: Round) -> dict:
 def serialize_tournament_list_item(
     tournament: Tournament, user: User | None = None
 ) -> TournamentListItem:
-    is_team_tournament = tournament.type == "team"
+    is_team_tournament = tournament.type in ("team", "quadriglia")
     raw_max_players_per_team = tournament.max_players_per_team if tournament.max_players_per_team is not None else 6
     raw_boards_per_match = tournament.boards_per_match if tournament.boards_per_match is not None else 4
     safe_max_players_per_team = max(raw_max_players_per_team, raw_boards_per_match) if is_team_tournament else None
@@ -752,7 +758,7 @@ async def serialize_tournament_detail(
     db: AsyncSession, tournament: Tournament, user: User | None = None
 ) -> TournamentDetail:
     standings = StandingsService().build_standings(tournament)
-    team_standings = TeamStandingsService().build_standings(tournament) if tournament.type == "team" else []
+    team_standings = TeamStandingsService().build_standings(tournament) if tournament.type in ("team", "quadriglia") else []
     teams = await team_service.get_teams(db, tournament.id)
 
     return TournamentDetail(

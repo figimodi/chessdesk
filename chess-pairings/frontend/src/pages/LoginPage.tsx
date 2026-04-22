@@ -48,7 +48,7 @@ export function LoginPage() {
       <div className="flex min-h-[calc(100vh-12rem)] items-center justify-center px-6 py-10">
         <Card className="w-full max-w-md border-0 shadow-lg">
           <CardHeader>
-            <CardTitle>Accedi a Chessdesk</CardTitle>
+            <CardTitle>Accedi a ChessDesk</CardTitle>
             <CardDescription>Inserisci le credenziali del tuo account per gestire i tornei.</CardDescription>
           </CardHeader>
           <CardContent>

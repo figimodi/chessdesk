@@ -18,7 +18,7 @@ export function AppShell({ children }: PropsWithChildren) {
             <div className="rounded-2xl bg-[var(--primary)] p-2 text-white">
               <Trophy className="h-5 w-5" />
             </div>
-            Chess Pairings
+            ChessDesk
           </Link>
           <div className="flex items-center gap-3">
             {user ? (

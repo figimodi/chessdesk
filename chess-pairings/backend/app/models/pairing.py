@@ -28,7 +28,10 @@ class Pairing(Base, TimestampMixin):
     board_number: Mapped[int] = mapped_column(Integer, nullable=False)
     white_player_id: Mapped[int] = mapped_column(ForeignKey("player.id", ondelete="RESTRICT"), nullable=False)
     black_player_id: Mapped[Optional[int]] = mapped_column(ForeignKey("player.id", ondelete="RESTRICT"))
-    result: Mapped[PairingResult] = mapped_column(Enum(PairingResult), default=PairingResult.unplayed)
+    result: Mapped[PairingResult] = mapped_column(
+        Enum(PairingResult, values_callable=lambda enum_items: [item.value for item in enum_items]),
+        default=PairingResult.unplayed,
+    )
     white_points: Mapped[float] = mapped_column(Numeric(4, 1), default=0)
     black_points: Mapped[float] = mapped_column(Numeric(4, 1), default=0)
     result_note: Mapped[Optional[str]] = mapped_column(String(120))

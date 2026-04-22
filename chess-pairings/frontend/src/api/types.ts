@@ -1,4 +1,4 @@
-export type TournamentType = "individual" | "team";
+export type TournamentType = "individual" | "team" | "quadriglia";
 export type TournamentFormat = "swiss";
 export type PairingResult = "1-0" | "0-1" | "1/2-1/2" | "1-0F" | "0-1F" | "0F-0F" | "1F-1F" | "1-bye" | "unplayed";
 

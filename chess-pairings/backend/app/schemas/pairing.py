@@ -35,6 +35,11 @@ class PairingResultUpdate(ORMModel):
     result: PairingResult
 
 
+class PairingBoardOrderUpdate(ORMModel):
+    side: str
+    target_pairing_id: int
+
+
 class PairingCreateResponse(ORMModel):
     round: RoundRead
     standings: list["StandingEntry"]

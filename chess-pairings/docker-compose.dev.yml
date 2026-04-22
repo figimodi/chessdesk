@@ -19,8 +19,12 @@ services:
       - "5173:5173"
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - frontend-node-modules:/app/node_modules
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
 
 networks:
   default:
     name: chess-pairings-dev
+
+volumes:
+  frontend-node-modules:

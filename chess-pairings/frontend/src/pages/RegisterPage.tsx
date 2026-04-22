@@ -92,7 +92,7 @@ export function RegisterPage() {
         <Card className="w-full max-w-md border-0 shadow-lg">
           <CardHeader>
             <CardTitle>Crea un account</CardTitle>
-            <CardDescription>Registrati e conferma la tua email per iniziare a usare Chess Pairings.</CardDescription>
+            <CardDescription>Registrati e conferma la tua email per iniziare a usare ChessDesk.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-5" onSubmit={handleSubmit}>

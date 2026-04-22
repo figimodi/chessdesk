@@ -11,6 +11,7 @@ from app.models.base import Base, TimestampMixin
 class TournamentType(str, enum.Enum):
     individual = "individual"
     team = "team"
+    quadriglia = "quadriglia"
 
 
 class TournamentFormat(str, enum.Enum):

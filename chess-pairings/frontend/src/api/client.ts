@@ -95,6 +95,13 @@ export const api = {
     )
     return response.data
   },
+  async updatePairingBoardOrder(tournamentId: string, pairingId: number, side: 'white' | 'black', target_pairing_id: number) {
+    const response = await customAxios.patch(
+      `/api/v1/admin/tournaments/${tournamentId}/pairings/board-order/${pairingId}`,
+      { side, target_pairing_id }
+    )
+    return response.data
+  },
   async deleteLatestRound(tournamentId: string) {
     const response = await customAxios.delete(
       `/api/v1/admin/tournaments/${tournamentId}/pairings/latest-round`

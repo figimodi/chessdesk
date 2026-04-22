@@ -24,6 +24,8 @@ type Props = {
   isGenerating?: boolean;
   isDeleting?: boolean;
   onResultChange: (pairingId: number, result: PairingResult, currentResult: PairingResult) => void;
+  onPairingBoardMove?: (pairingId: number, side: 'white' | 'black', target_pairing_id: number) => void;
+  canReorderTeamBoards?: boolean;
 };
 
 const results: PairingResult[] = ["1-0", "0-1", "1/2-1/2", "1-0F", "0-1F", "0F-0F", "1F-1F"];
@@ -48,9 +50,13 @@ export function RoundsPanel({
   isGenerating = false,
   isDeleting = false,
   onResultChange,
+  onPairingBoardMove,
+  canReorderTeamBoards = false,
 }: Props) {
+  const isTeamLikeTournament = tournamentType === "team" || tournamentType === "quadriglia";
   const [selectedRoundId, setSelectedRoundId] = useState<number | null>(rounds[rounds.length - 1]?.id ?? null);
   const [expandedPairingId, setExpandedPairingId] = useState<number | null>(null);
+  const [dragState, setDragState] = useState<{ pairingId: number; side: 'white' | 'black' } | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -147,17 +153,23 @@ export function RoundsPanel({
           ) : null}
         </div>
         <div className="space-y-3">
-              {tournamentType === "team"
+              {isTeamLikeTournament
             ? renderTeamMatches({
-                pairings: selectedRound.pairings,
-                playersById,
-                standingsByPlayer,
-                category,
-                isLatestRoundSelected,
-                expandedPairingId,
-                setExpandedPairingId,
-                onResultChange,
-              })
+                  pairings: selectedRound.pairings,
+                  playersById,
+                  standingsByPlayer,
+                  category,
+                  canManage,
+                  canReorderTeamBoards,
+                  isLatestRoundSelected,
+                  expandedPairingId,
+                  dragState,
+                  onPairingBoardMove,
+                  setDragState,
+                  setExpandedPairingId,
+                  onResultChange,
+                  tournamentType,
+                })
             : selectedRound.pairings.map((pairing) => {
             const whitePlayer = playersById.get(pairing.white_player_id);
             const blackPlayer = pairing.black_player_id ? playersById.get(pairing.black_player_id) : undefined;
@@ -290,19 +302,31 @@ function renderTeamMatches({
   playersById,
   standingsByPlayer,
   category,
+  canManage,
+  canReorderTeamBoards,
   isLatestRoundSelected,
   expandedPairingId,
+  dragState,
+  onPairingBoardMove,
+  setDragState,
   setExpandedPairingId,
   onResultChange,
+  tournamentType,
 }: {
   pairings: Pairing[];
   playersById: Map<number, TournamentPlayer>;
   standingsByPlayer: Map<number, StandingEntry>;
   category: string;
+  canManage: boolean;
+  canReorderTeamBoards: boolean;
   isLatestRoundSelected: boolean;
   expandedPairingId: number | null;
+  dragState: { pairingId: number; side: 'white' | 'black' } | null;
+  onPairingBoardMove?: (pairingId: number, side: 'white' | 'black', target_pairing_id: number) => void;
+  setDragState: (value: { pairingId: number; side: 'white' | 'black' } | null) => void;
   setExpandedPairingId: (value: number | null | ((current: number | null) => number | null)) => void;
   onResultChange: (pairingId: number, result: PairingResult, currentResult: PairingResult) => void;
+  tournamentType: TournamentType;
 }) {
   const matches = new Map<number, Pairing[]>();
   pairings.forEach((pairing) => {
@@ -314,6 +338,8 @@ function renderTeamMatches({
     .sort((left, right) => left[0] - right[0])
     .map(([matchNumber, matchPairings]) => {
     const sortedPairings = [...matchPairings].sort((left, right) => left.board_number - right.board_number);
+    const isQuadriglia = tournamentType === "quadriglia";
+    const canReorderMatch = canManage && canReorderTeamBoards && isLatestRoundSelected && sortedPairings.every((pairing) => pairing.result === "unplayed");
     const whiteTeamName = sortedPairings[0]?.white_team_name ?? "Squadra A";
     const blackTeamName = sortedPairings[0]?.black_team_name ?? "Squadra B";
     const whiteScore = sortedPairings.reduce((total, pairing) => total + pairing.white_points, 0);
@@ -330,12 +356,39 @@ function renderTeamMatches({
               <div className="rounded-xl border bg-[var(--muted)] px-4 py-3 text-center text-base font-semibold">
                 <div className="grid gap-3 lg:grid-cols-[1.4fr_180px_1.4fr] lg:items-stretch">
                   <div className="rounded-xl border bg-white px-3 py-3 shadow-sm text-left">{whiteTeamName}</div>
-                  <div className="flex items-center justify-center rounded-xl border bg-[var(--muted)] px-3 py-3 text-center">
-                    {formatScore(whiteScore)} - {formatScore(blackScore)}
+                  <div
+                    className={`flex items-center justify-center rounded-xl border bg-[var(--muted)] px-3 py-3 text-center ${isQuadriglia && isLatestRoundSelected ? "cursor-pointer" : ""}`}
+                    onClick={() => {
+                      if (!isQuadriglia || !isLatestRoundSelected) return;
+                      setExpandedPairingId((current) => (current === sortedPairings[0]?.id ? null : sortedPairings[0]?.id ?? null));
+                    }}
+                  >
+                    <div>
+                      <div>{formatScore(whiteScore)} - {formatScore(blackScore)}</div>
+                      {isQuadriglia && isLatestRoundSelected && expandedPairingId === sortedPairings[0]?.id ? (
+                        <div className="mt-2 flex flex-wrap justify-center gap-1">
+                          {results.filter((result) => result === "1-0" || result === "0-1" || result === "1/2-1/2").map((result) => (
+                            <Button
+                              key={result}
+                              variant={sortedPairings[0]?.result === result ? "default" : "outline"}
+                              size="sm"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onResultChange(sortedPairings[0].id, result, sortedPairings[0].result);
+                                setExpandedPairingId(null);
+                              }}
+                            >
+                              {result}
+                            </Button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="rounded-xl border bg-white px-3 py-3 shadow-sm text-right">{blackTeamName}</div>
                 </div>
               </div>
+              {canReorderMatch ? <div className="text-xs text-[var(--muted-foreground)]">Trascina le schede giocatore a sinistra o destra per cambiare l'ordine di scacchiera.</div> : null}
               {sortedPairings.map((pairing) => {
                 const whitePlayer = playersById.get(pairing.white_player_id);
                 const whiteStanding = standingsByPlayer.get(pairing.white_player_id);
@@ -344,16 +397,30 @@ function renderTeamMatches({
 
                 return (
                   <div key={pairing.id} className="grid gap-3 lg:grid-cols-[1.4fr_180px_1.4fr] lg:items-stretch">
-                    <PlayerMatchCard player={whitePlayer} standing={whiteStanding} category={category} pieceColor={pairing.board_number % 2 === 1 ? "white" : "black"} />
                     <div
-                      className={`rounded-xl border bg-[var(--muted)] px-3 py-3 text-center ${!pairing.is_bye && isLatestRoundSelected ? "cursor-pointer" : "cursor-default"}`}
-                      onClick={() => {
-                        if (!isLatestRoundSelected || pairing.is_bye) return;
-                        setExpandedPairingId((current) => (current === pairing.id ? null : pairing.id));
+                      className={canReorderMatch ? "cursor-grab active:cursor-grabbing" : ""}
+                      draggable={canReorderMatch}
+                      onDragStart={() => canReorderMatch && setDragState({ pairingId: pairing.id, side: 'white' })}
+                      onDragEnd={() => setDragState(null)}
+                      onDragOver={(event) => {
+                        if (!canReorderMatch || !dragState || dragState.side !== 'white' || dragState.pairingId === pairing.id) return;
+                        event.preventDefault();
+                      }}
+                      onDrop={(event) => {
+                        if (!canReorderMatch || !dragState || dragState.side !== 'white' || dragState.pairingId === pairing.id) return;
+                        event.preventDefault();
+                        onPairingBoardMove?.(dragState.pairingId, 'white', pairing.id);
+                        setDragState(null);
                       }}
                     >
-                      <div className="text-base font-semibold">{renderCompactResult(pairing)}</div>
-                      {!pairing.is_bye && isLatestRoundSelected && expandedPairingId === pairing.id ? (
+                      <PlayerMatchCard player={whitePlayer} standing={whiteStanding} category={category} pieceColor={pairing.board_number % 2 === 1 ? "white" : "black"} />
+                    </div>
+                    <div className={`rounded-xl border bg-[var(--muted)] px-3 py-3 text-center ${!isQuadriglia && !pairing.is_bye && isLatestRoundSelected ? "cursor-pointer" : "cursor-default"}`} onClick={() => {
+                      if (isQuadriglia || !isLatestRoundSelected || pairing.is_bye) return;
+                      setExpandedPairingId((current) => (current === pairing.id ? null : pairing.id));
+                    }}>
+                      <div className="text-base font-semibold">{isQuadriglia ? `Scacchiera ${pairing.board_number}` : renderCompactResult(pairing)}</div>
+                      {!isQuadriglia && !pairing.is_bye && isLatestRoundSelected && expandedPairingId === pairing.id ? (
                         <div className="mt-2 flex flex-wrap justify-center gap-1">
                           {results.map((result) => (
                             <Button
@@ -372,7 +439,24 @@ function renderTeamMatches({
                         </div>
                       ) : null}
                     </div>
-                    <PlayerMatchCard player={blackPlayer} standing={blackStanding} category={category} isBye={pairing.is_bye} pieceColor={pairing.board_number % 2 === 1 ? "black" : "white"} />
+                    <div
+                      className={canReorderMatch ? "cursor-grab active:cursor-grabbing" : ""}
+                      draggable={canReorderMatch}
+                      onDragStart={() => canReorderMatch && setDragState({ pairingId: pairing.id, side: 'black' })}
+                      onDragEnd={() => setDragState(null)}
+                      onDragOver={(event) => {
+                        if (!canReorderMatch || !dragState || dragState.side !== 'black' || dragState.pairingId === pairing.id) return;
+                        event.preventDefault();
+                      }}
+                      onDrop={(event) => {
+                        if (!canReorderMatch || !dragState || dragState.side !== 'black' || dragState.pairingId === pairing.id) return;
+                        event.preventDefault();
+                        onPairingBoardMove?.(dragState.pairingId, 'black', pairing.id);
+                        setDragState(null);
+                      }}
+                    >
+                      <PlayerMatchCard player={blackPlayer} standing={blackStanding} category={category} isBye={pairing.is_bye} pieceColor={pairing.board_number % 2 === 1 ? "black" : "white"} />
+                    </div>
                   </div>
                 );
               })}

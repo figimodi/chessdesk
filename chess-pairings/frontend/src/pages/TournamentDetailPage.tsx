@@ -13,6 +13,7 @@ import {
   useDeleteTeam,
   useDeleteLatestRound,
   useGeneratePairings,
+  useUpdatePairingBoardOrder,
   useReorderTeamMembers,
   useReopenRegistration,
   useRemoveTeamMember,
@@ -63,6 +64,7 @@ export function TournamentDetailPage() {
   const importMutation = useImportPlayerFromFide();
   const generateMutation = useGeneratePairings(tournamentId);
   const deleteRoundMutation = useDeleteLatestRound(tournamentId);
+  const updatePairingBoardOrderMutation = useUpdatePairingBoardOrder(tournamentId);
   const uploadMutation = useUploadBulletin(tournamentId);
   const [catalogQuery, setCatalogQuery] = useState("");
   const [debouncedCatalogQuery, setDebouncedCatalogQuery] = useState("");
@@ -152,7 +154,8 @@ export function TournamentDetailPage() {
 
   const generatedRounds = tournament?.rounds.filter((round) => round.pairings.length > 0) ?? [];
   const nextRoundNumber = generatedRounds.length + 1;
-  const participantLabel = tournament?.type === "team" ? "Squadre" : "Giocatori";
+  const isTeamLikeTournament = tournament?.type === "team" || tournament?.type === "quadriglia";
+  const participantLabel = isTeamLikeTournament ? "Squadre" : "Giocatori";
 
   const catalogRatingLabel =
     tournament?.time_control_category === "blitz" ? "ELO Blitz" : tournament?.time_control_category === "rapid" ? "ELO Rapid" : "ELO Standard";
@@ -202,12 +205,14 @@ export function TournamentDetailPage() {
     wins_black: "Vittorie/Nero",
     played_games: "Partite",
     individual_points: "Punti ind.",
-    head_to_head: "Class. avulsa (PS/PI)",
+    head_to_head: tournament?.type === "quadriglia" ? "Class. avulsa" : "Class. avulsa (PS/PI)",
     weighted_sonneborn: "Sonneborn pes.",
   };
   const visibleStandingsTieBreaks =
     tournament?.tie_breaks.filter((criterion) => criterion !== "direct_encounter" && criterion !== "wins_black") ?? [];
-  const visibleTeamTieBreaks = tournament?.tie_breaks ?? [];
+  const visibleTeamTieBreaks = tournament?.type === "quadriglia"
+    ? tournament?.tie_breaks.filter((criterion) => criterion !== "individual_points" && criterion !== "weighted_sonneborn") ?? []
+    : tournament?.tie_breaks ?? [];
 
   useEffect(() => {
     if (!canConcludeTournament) {
@@ -272,7 +277,7 @@ export function TournamentDetailPage() {
           }
         }}
       />
-      {managedPlayer && canManage && tournament.type !== "team" ? (
+      {managedPlayer && canManage && !isTeamLikeTournament ? (
         <PlayerAvailabilityDialog
           player={managedPlayer}
           roundsCount={tournament.rounds_count}
@@ -302,7 +307,7 @@ export function TournamentDetailPage() {
           isPrivate={tournament.is_private}
           name={tournament.name}
           onRegister={!tournament.is_private && !tournament.is_registration_closed ? () => setIsRegistrationDialogOpen(true) : undefined}
-          participantsLabel={`${tournament.type === "team" ? tournament.teams_count : tournament.players_count}`}
+          participantsLabel={`${isTeamLikeTournament ? tournament.teams_count : tournament.players_count}`}
           registerButtonLabel="Iscriviti"
           roundsLabel={`${tournament.rounds_count} turni`}
           secondaryActions={
@@ -343,7 +348,7 @@ export function TournamentDetailPage() {
           <Button variant={activeTab === "participants" ? "default" : "outline"} size="sm" onClick={() => setActiveTab("participants")}>
             Partecipanti
           </Button>
-          {tournament.type === "team" ? (
+          {isTeamLikeTournament ? (
             <Button variant={activeTab === "teams" ? "default" : "outline"} size="sm" onClick={() => setActiveTab("teams")}>
               Squadre
             </Button>
@@ -458,7 +463,7 @@ export function TournamentDetailPage() {
                       <TableHead>FED</TableHead>
                       <TableHead>{catalogRatingLabel}</TableHead>
                       <TableHead>Anno nascita</TableHead>
-                      {tournament.type === "team" ? <TableHead>Team</TableHead> : null}
+                      {isTeamLikeTournament ? <TableHead>Team</TableHead> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -482,7 +487,7 @@ export function TournamentDetailPage() {
                         </TableCell>
                         <TableCell>{getTournamentPlayerRating(player)}</TableCell>
                         <TableCell>{player.birth_year ?? "-"}</TableCell>
-                        {tournament.type === "team" ? <TableCell>{player.team_name ?? "-"}</TableCell> : null}
+                        {isTeamLikeTournament ? <TableCell>{player.team_name ?? "-"}</TableCell> : null}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -491,7 +496,7 @@ export function TournamentDetailPage() {
 
               {canManage && selectedParticipantId ? (
                 <div className="flex justify-end gap-3">
-                  {tournament.type !== "team" ? (
+                  {!isTeamLikeTournament ? (
                     <Button variant="outline" onClick={() => setSelectedPlayerForManagement(selectedParticipantId)}>
                       Gestisci partecipante
                     </Button>
@@ -558,7 +563,7 @@ export function TournamentDetailPage() {
           </Card>
         ) : null}
 
-        {activeTab === "teams" && tournament.type === "team" ? (
+        {activeTab === "teams" && isTeamLikeTournament ? (
           <TeamsPanel
             canManage={canManage}
             teams={tournament.teams}
@@ -601,7 +606,7 @@ export function TournamentDetailPage() {
               <CardTitle>Classifica</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {tournament.type === "team" ? (
+              {isTeamLikeTournament ? (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -626,7 +631,7 @@ export function TournamentDetailPage() {
                             <TableCell>{entry.name}</TableCell>
                             <TableCell>{formatScore(entry.match_points)}</TableCell>
                             {visibleTeamTieBreaks.map((criterion) => (
-                              <TableCell key={criterion}>{renderTeamTieBreakValue(entry, criterion)}</TableCell>
+                              <TableCell key={criterion}>{renderTeamTieBreakValue(entry, criterion, tournament.type)}</TableCell>
                             ))}
                           </TableRow>
                           {expandedTeamStandingId === entry.team_id ? (
@@ -758,6 +763,8 @@ export function TournamentDetailPage() {
             isGenerating={generateMutation.isPending}
             isDeleting={deleteRoundMutation.isPending}
             onResultChange={handleResultChange}
+            onPairingBoardMove={(pairingId, side, target_pairing_id) => updatePairingBoardOrderMutation.mutate({ pairingId, side, target_pairing_id })}
+            canReorderTeamBoards={isTeamLikeTournament && !tournament.enforce_board_order}
           />
         ) : null}
       </section>
@@ -872,10 +879,12 @@ function renderTeamTieBreakValue(
     weighted_sonneborn: number;
   },
   criterion: string,
+  tournamentType?: string,
 ) {
   if (criterion === "individual_points") return formatScore(entry.individual_points);
   if (criterion === "head_to_head") {
     if (!entry.head_to_head_applies) return "-";
+    if (tournamentType === "quadriglia") return formatScore(entry.head_to_head_match_points);
     return `${formatScore(entry.head_to_head_match_points)} / ${formatScore(entry.head_to_head_individual_points)}`;
   }
   if (criterion === "weighted_sonneborn") return formatScore(entry.weighted_sonneborn);

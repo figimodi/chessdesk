@@ -6,10 +6,12 @@ from app.schemas.team import TeamStandingEntry
 
 
 TEAM_DEFAULT_TIE_BREAKS = ["individual_points", "head_to_head", "weighted_sonneborn"]
+QUADRIGLIA_DEFAULT_TIE_BREAKS = ["head_to_head"]
 
 
 class TeamStandingsService:
     def build_standings(self, tournament: Tournament) -> list[TeamStandingEntry]:
+        is_quadriglia = tournament.type.value == "quadriglia"
         player_team_ids = {entry.player_id: entry.team_id for entry in tournament.players}
         generated_rounds = [round_model for round_model in sorted(tournament.rounds, key=lambda item: item.number) if round_model.pairings]
         if generated_rounds and any(pairing.result == PairingResult.unplayed for pairing in generated_rounds[-1].pairings):
@@ -33,7 +35,8 @@ class TeamStandingsService:
                 if black_team_id is None:
                     white_board_points = sum(float(pairing.white_points) for pairing in match)
                     match_points[white_team_id] += float(tournament.match_points_win or 2)
-                    individual_points[white_team_id] += white_board_points
+                    if not is_quadriglia:
+                        individual_points[white_team_id] += white_board_points
                     continue
 
                 white_board_points = sum(float(pairing.white_points) for pairing in match)
@@ -42,14 +45,17 @@ class TeamStandingsService:
 
                 match_points[white_team_id] += white_match_points
                 match_points[black_team_id] += black_match_points
-                individual_points[white_team_id] += white_board_points
-                individual_points[black_team_id] += black_board_points
+                if not is_quadriglia:
+                    individual_points[white_team_id] += white_board_points
+                    individual_points[black_team_id] += black_board_points
                 encounters[white_team_id].add(black_team_id)
                 encounters[black_team_id].add(white_team_id)
                 head_to_head[white_team_id][black_team_id]["match"] += white_match_points
-                head_to_head[white_team_id][black_team_id]["individual"] += white_board_points
+                if not is_quadriglia:
+                    head_to_head[white_team_id][black_team_id]["individual"] += white_board_points
                 head_to_head[black_team_id][white_team_id]["match"] += black_match_points
-                head_to_head[black_team_id][white_team_id]["individual"] += black_board_points
+                if not is_quadriglia:
+                    head_to_head[black_team_id][white_team_id]["individual"] += black_board_points
 
         for round_model in locked_rounds:
             for match in self._round_matches(round_model.pairings):
@@ -60,22 +66,23 @@ class TeamStandingsService:
 
                 white_board_points = sum(float(pairing.white_points) for pairing in match)
                 black_board_points = sum(float(pairing.black_points) for pairing in match)
-                weighted_components[white_team_id].append(match_points[black_team_id] * white_board_points)
-                weighted_components[black_team_id].append(match_points[white_team_id] * black_board_points)
+                if not is_quadriglia:
+                    weighted_components[white_team_id].append(match_points[black_team_id] * white_board_points)
+                    weighted_components[black_team_id].append(match_points[white_team_id] * black_board_points)
 
         standings = [
             TeamStandingEntry(
                 team_id=team.id,
                 name=team.name,
                 match_points=match_points[team.id],
-                individual_points=individual_points[team.id],
+                individual_points=individual_points[team.id] if not is_quadriglia else 0,
                 head_to_head_applies=False,
-                weighted_sonneborn=sum(weighted_components[team.id]),
+                weighted_sonneborn=sum(weighted_components[team.id]) if not is_quadriglia else 0,
             )
             for team in tournament.teams
         ]
 
-        tie_breaks = [item for item in (tournament.tie_breaks or "").split(",") if item] or TEAM_DEFAULT_TIE_BREAKS
+        tie_breaks = [item for item in (tournament.tie_breaks or "").split(",") if item] or (QUADRIGLIA_DEFAULT_TIE_BREAKS if is_quadriglia else TEAM_DEFAULT_TIE_BREAKS)
         standings.sort(key=lambda item: (-item.match_points, item.name))
         groups = self._group_by_match_points(standings)
 
@@ -85,13 +92,13 @@ class TeamStandingsService:
                 if len(group) <= 1:
                     next_groups.append(group)
                     continue
-                if criterion == "individual_points":
+                if criterion == "individual_points" and not is_quadriglia:
                     next_groups.extend(self._group_by_value(group, lambda item: item.individual_points))
                     continue
                 if criterion == "head_to_head":
-                    next_groups.extend(self._split_head_to_head(group, head_to_head, encounters))
+                    next_groups.extend(self._split_head_to_head(group, head_to_head, encounters, is_quadriglia))
                     continue
-                if criterion == "weighted_sonneborn":
+                if criterion == "weighted_sonneborn" and not is_quadriglia:
                     next_groups.extend(self._group_by_value(group, lambda item: item.weighted_sonneborn))
                     continue
                 next_groups.append(group)
@@ -131,7 +138,7 @@ class TeamStandingsService:
             grouped[selector(item)].append(item)
         return [sorted(grouped[key], key=lambda item: item.name) for key in sorted(grouped.keys(), reverse=True)]
 
-    def _split_head_to_head(self, group, head_to_head, encounters):
+    def _split_head_to_head(self, group, head_to_head, encounters, is_quadriglia: bool):
         group_ids = {item.team_id for item in group}
         if any((group_ids - {item.team_id}) - encounters[item.team_id] for item in group):
             return [group]
@@ -151,12 +158,12 @@ class TeamStandingsService:
                     individual_points=item.individual_points,
                     head_to_head_applies=True,
                     head_to_head_match_points=match_score,
-                    head_to_head_individual_points=individual_score,
+                    head_to_head_individual_points=0 if is_quadriglia else individual_score,
                     weighted_sonneborn=item.weighted_sonneborn,
                 )
             )
 
         grouped = defaultdict(list)
         for item in scored:
-            grouped[(item.head_to_head_match_points, item.head_to_head_individual_points)].append(item)
+            grouped[(item.head_to_head_match_points, 0 if is_quadriglia else item.head_to_head_individual_points)].append(item)
         return [sorted(grouped[key], key=lambda item: item.name) for key in sorted(grouped.keys(), reverse=True)]

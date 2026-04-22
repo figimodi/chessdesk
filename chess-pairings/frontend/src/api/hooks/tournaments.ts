@@ -69,6 +69,17 @@ export function useDeleteLatestRound(tournamentId: string) {
   });
 }
 
+export function useUpdatePairingBoardOrder(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { pairingId: number; side: 'white' | 'black'; target_pairing_id: number }) =>
+      api.updatePairingBoardOrder(tournamentId, payload.pairingId, payload.side, payload.target_pairing_id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QueryCacheKeys.tournament(tournamentId) });
+    },
+  });
+}
+
 export function useCloseRegistration(tournamentId: string) {
   const queryClient = useQueryClient();
   return useMutation({

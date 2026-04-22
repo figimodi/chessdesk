@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_pairing_or_404, get_tournament_or_404
 from app.core.database import get_db
-from app.schemas.pairing import PairingCreateResponse, PairingResultUpdate
+from app.schemas.pairing import PairingBoardOrderUpdate, PairingCreateResponse, PairingResultUpdate
 from app.services import pairing as pairing_service
 
 router = APIRouter(tags=["pairings"])
@@ -26,6 +26,15 @@ async def update_pairing_result(
     db: AsyncSession = Depends(get_db),
 ):
     return await pairing_service.update_pairing_result(db, pairing, data)
+
+
+@router.patch("/api/v1/admin/tournaments/{tournament_id}/pairings/board-order/{pairing_id}")
+async def update_pairing_board_order(
+    data: PairingBoardOrderUpdate,
+    pairing=Depends(get_pairing_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    return await pairing_service.update_pairing_board_order(db, pairing, data)
 
 
 @router.delete("/api/v1/admin/tournaments/{tournament_id}/pairings/latest-round")
